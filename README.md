@@ -36,12 +36,12 @@ docker compose up --build -d
 - `GET /api/health` — healthcheck
 
 ### Auth
-- `POST /api/auth/register` — регистрация `{username, email, password}`
-- `POST /api/auth/login` — логин `{email, password}`
+- `POST /api/auth/register` — регистрация `{username, password}`
+- `POST /api/auth/login` — логин `{username, password}`
 - `GET /api/auth/me` — профиль (JWT)
 
 ### Places
-- `GET /api/places` — список (фильтры: city, cuisine_type_id, category_id, min_rating, is_gem, search, sort)
+- `GET /api/places` — список (фильтры: city, cuisine_type_id, category_id, min_rating, is_gem, search, sort: `rating`|`rating_asc`|`name`)
 - `GET /api/places/cities` — список городов (уникальные)
 - `GET /api/places/:id` — деталь
 - `POST /api/places` — создать (auth)
@@ -56,6 +56,9 @@ docker compose up --build -d
 - `DELETE /api/places/:id/reviews/:rid` — удалить (auth, author)
 - `POST /api/places/:id/reviews/:rid/image` — загрузить фото к отзыву (auth, author)
 - `GET /api/users/:userId/reviews` — отзывы пользователя
+
+### Геосаджест
+- `GET /api/suggest?text=...&ll=lat,lng` — подсказки Яндекс Геосаджест (проксируется через бэкенд)
 
 ### Справочники
 - `GET /api/cuisine-types`
@@ -87,7 +90,7 @@ aeva-eat/
 │   │   ├── model/                   — структуры данных
 │   │   ├── repository/              — SQL запросы
 │   │   └── service/                 — бизнес-логика
-│   ├── migrations/                  — SQL миграции (001–006)
+│   ├── migrations/                  — SQL миграции (001–008)
 │   └── Dockerfile
 ├── frontend/
 │   ├── src/

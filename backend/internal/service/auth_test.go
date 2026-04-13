@@ -12,12 +12,11 @@ type mockUserRepo struct {
 type userRecord struct {
 	id           int
 	username     string
-	email        string
 	passwordHash string
 }
 
-func (m *mockUserRepo) findByEmail(email string) *userRecord {
-	return m.users[email]
+func (m *mockUserRepo) findByUsername(username string) *userRecord {
+	return m.users[username]
 }
 
 func TestAuthService_Register(t *testing.T) {
