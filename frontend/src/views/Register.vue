@@ -9,7 +9,7 @@
 
           <form @submit.prevent="handleRegister">
             <div class="mb-3">
-              <label for="username" class="form-label">Имя пользователя</label>
+              <label for="username" class="form-label">Логин *</label>
               <input
                 id="username"
                 v-model="username"
@@ -21,19 +21,18 @@
             </div>
 
             <div class="mb-3">
-              <label for="email" class="form-label">Email</label>
+              <label for="displayName" class="form-label">Имя <span class="text-muted fw-normal">(необязательно)</span></label>
               <input
-                id="email"
-                v-model="email"
-                type="email"
+                id="displayName"
+                v-model="displayName"
+                type="text"
                 class="form-control"
-                placeholder="your@email.com"
-                required
+                placeholder="Как вас называть"
               />
             </div>
 
             <div class="mb-3">
-              <label for="password" class="form-label">Пароль</label>
+              <label for="password" class="form-label">Пароль *</label>
               <input
                 id="password"
                 v-model="password"
@@ -70,7 +69,7 @@ const auth = useAuthStore()
 const router = useRouter()
 
 const username = ref('')
-const email = ref('')
+const displayName = ref('')
 const password = ref('')
 const error = ref('')
 const loading = ref(false)
@@ -78,6 +77,16 @@ const loading = ref(false)
 async function handleRegister() {
   error.value = ''
   loading.value = true
+  try {
+    await auth.register(username.value, displayName.value, password.value)
+    router.push('/')
+  } catch (e) {
+    error.value = e.response?.data?.error || 'Ошибка регистрации'
+  } finally {
+    loading.value = false
+  }
+}
+</script>
   try {
     await auth.register(username.value, email.value, password.value)
     router.push('/')

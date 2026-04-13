@@ -9,13 +9,13 @@
 
           <form @submit.prevent="handleLogin">
             <div class="mb-3">
-              <label for="email" class="form-label">Email</label>
+              <label for="username" class="form-label">Логин</label>
               <input
-                id="email"
-                v-model="email"
-                type="email"
+                id="username"
+                v-model="username"
+                type="text"
                 class="form-control"
-                placeholder="your@email.com"
+                placeholder="username"
                 required
               />
             </div>
@@ -56,7 +56,7 @@ import { useAuthStore } from '../stores/auth'
 const auth = useAuthStore()
 const router = useRouter()
 
-const email = ref('')
+const username = ref('')
 const password = ref('')
 const error = ref('')
 const loading = ref(false)
@@ -65,7 +65,7 @@ async function handleLogin() {
   error.value = ''
   loading.value = true
   try {
-    await auth.login(email.value, password.value)
+    await auth.login(username.value, password.value)
     router.push('/')
   } catch (e) {
     error.value = e.response?.data?.error || 'Ошибка входа'

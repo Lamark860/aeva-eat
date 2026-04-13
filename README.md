@@ -9,7 +9,7 @@
 | Backend | Go 1.25, Chi router |
 | Database | PostgreSQL 16 |
 | Frontend | Vue 3, Vite, Bootstrap 5 |
-| Карта | Leaflet + OpenStreetMap |
+| Карта | Яндекс Карты JS API 2.1 |
 | Proxy | Nginx |
 | Инфра | Docker Compose |
 
@@ -54,11 +54,21 @@ docker compose up --build -d
 - `POST /api/places/:id/reviews` — создать отзыв (auth)
 - `PUT /api/places/:id/reviews/:rid` — обновить (auth, author)
 - `DELETE /api/places/:id/reviews/:rid` — удалить (auth, author)
+- `POST /api/places/:id/reviews/:rid/image` — загрузить фото к отзыву (auth, author)
 - `GET /api/users/:userId/reviews` — отзывы пользователя
 
 ### Справочники
 - `GET /api/cuisine-types`
 - `GET /api/categories`
+
+### Wishlist
+- `GET /api/wishlist` — мои запланированные заведения (auth)
+- `GET /api/wishlist/ids` — ID запланированных (auth)
+- `POST /api/wishlist/:id` — добавить в план (auth)
+- `DELETE /api/wishlist/:id` — убрать из плана (auth)
+- `GET /api/wishlist/custom` — кастомный список (auth)
+- `POST /api/wishlist/custom` — добавить запись `{name, note?}` (auth)
+- `DELETE /api/wishlist/custom/:id` — удалить запись (auth)
 
 ## Структура проекта
 
@@ -77,7 +87,7 @@ aeva-eat/
 │   │   ├── model/                   — структуры данных
 │   │   ├── repository/              — SQL запросы
 │   │   └── service/                 — бизнес-логика
-│   ├── migrations/                  — SQL миграции (001, 002)
+│   ├── migrations/                  — SQL миграции (001–006)
 │   └── Dockerfile
 ├── frontend/
 │   ├── src/

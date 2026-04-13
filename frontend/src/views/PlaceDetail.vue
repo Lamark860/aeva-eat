@@ -27,12 +27,25 @@
         <router-link :to="`/places/${place.id}/edit`" class="btn btn-outline-primary btn-sm">Ред.</router-link>
         <button class="btn btn-outline-danger btn-sm" @click="handleDelete">Удалить</button>
       </div>
+      <button
+        v-if="auth.isAuthenticated"
+        class="btn btn-sm ms-auto"
+        :class="wishlist.isWishlisted(place.id) ? 'btn-danger' : 'btn-outline-danger'"
+        @click="wishlist.toggle(place.id)"
+        :title="wishlist.isWishlisted(place.id) ? 'Убрать из планов' : 'Хочу сходить'"
+      >
+        {{ wishlist.isWishlisted(place.id) ? '❤️ В планах' : '🤍 Хочу сходить' }}
+      </button>
     </div>
 
     <!-- Ratings summary -->
     <div v-if="place.review_count > 0" class="card mb-4">
       <div class="card-body">
-        <div class="row text-center">
+        <div class="row text-center align-items-center">
+          <div class="col-auto pe-4 border-end">
+            <div class="fs-1 fw-bold" style="color: var(--bs-primary)">{{ overallRating }}</div>
+            <small class="text-muted">Общая</small>
+          </div>
           <div class="col">
             <div class="fs-3 fw-bold text-warning">{{ avgRound(place.avg_food) }}</div>
             <small class="text-muted">Кухня</small>
@@ -112,6 +125,8 @@ import { useRoute, useRouter } from 'vue-router'
 import { usePlacesStore } from '../stores/places'
 import { useReviewsStore } from '../stores/reviews'
 import { useAuthStore } from '../stores/auth'
+import { useWishlistStore } from '../stores/wishlist'
+import { useToast } from '../composables/useToast'
 import ReviewCard from '../components/ReviewCard.vue'
 import ReviewForm from '../components/ReviewForm.vue'
 import MapView from '../components/MapView.vue'
@@ -121,11 +136,19 @@ const router = useRouter()
 const placesStore = usePlacesStore()
 const reviewsStore = useReviewsStore()
 const auth = useAuthStore()
+const wishlist = useWishlistStore()
+const toast = useToast()
 
 const editingReview = ref(null)
 
 const place = computed(() => placesStore.currentPlace)
 const isOwner = computed(() => auth.user && place.value && place.value.created_by === auth.user.id)
+
+const overallRating = computed(() => {
+  const p = place.value
+  if (!p || !p.avg_food || !p.avg_service || !p.avg_vibe) return '–'
+  return ((Number(p.avg_food) + Number(p.avg_service) + Number(p.avg_vibe)) / 3).toFixed(1)
+})
 
 function avgRound(val) {
   return val ? Number(val).toFixed(1) : '–'
@@ -137,25 +160,41 @@ function canEditReview(rv) {
 }
 
 async function handleCreateReview(data) {
-  await reviewsStore.createReview(place.value.id, data)
+  const photoFile = data._photoFile
+  delete data._photoFile
+  const created = await reviewsStore.createReview(place.value.id, data)
+  if (photoFile && created?.id) {
+    await reviewsStore.uploadReviewImage(place.value.id, created.id, photoFile)
+  }
+  toast.success('Отзыв добавлен!')
   await placesStore.fetchPlace(route.params.id)
+  await reviewsStore.fetchByPlace(route.params.id)
 }
 
 async function handleUpdateReview(data) {
+  const photoFile = data._photoFile
+  delete data._photoFile
   await reviewsStore.updateReview(place.value.id, editingReview.value.id, data)
+  if (photoFile) {
+    await reviewsStore.uploadReviewImage(place.value.id, editingReview.value.id, photoFile)
+  }
   editingReview.value = null
+  toast.success('Отзыв обновлён')
   await placesStore.fetchPlace(route.params.id)
+  await reviewsStore.fetchByPlace(route.params.id)
 }
 
 async function handleDeleteReview(id) {
   if (!confirm('Удалить отзыв?')) return
   await reviewsStore.deleteReview(place.value.id, id)
+  toast.info('Отзыв удалён')
   await placesStore.fetchPlace(route.params.id)
 }
 
 async function handleDelete() {
   if (!confirm('Удалить заведение?')) return
   await placesStore.deletePlace(place.value.id)
+  toast.info('Заведение удалено')
   router.push('/places')
 }
 

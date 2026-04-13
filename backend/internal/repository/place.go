@@ -17,13 +17,13 @@ func NewPlaceRepo(db *sql.DB) *PlaceRepo {
 }
 
 type PlaceFilter struct {
-	City          string
-	CuisineTypeID int
-	CategoryID    int
-	MinRating     float64
-	IsGem         *bool
-	Search        string
-	Sort          string
+	City           string
+	CuisineTypeIDs []int
+	CategoryIDs    []int
+	MinRating      float64
+	IsGem          *bool
+	Search         string
+	Sort           string
 }
 
 func (r *PlaceRepo) List(f PlaceFilter) ([]model.Place, error) {
@@ -32,7 +32,8 @@ func (r *PlaceRepo) List(f PlaceFilter) ([]model.Place, error) {
 			p.cuisine_type_id, ct.name AS cuisine_type, p.website,
 			p.created_by, p.image_url, p.created_at, p.updated_at,
 			COALESCE(rs.avg_food, 0), COALESCE(rs.avg_service, 0), COALESCE(rs.avg_vibe, 0),
-			COALESCE(rs.review_count, 0)
+			COALESCE(rs.review_count, 0),
+			EXISTS(SELECT 1 FROM reviews rv WHERE rv.place_id = p.id AND rv.is_gem = true) AS is_gem_place
 		FROM places p
 		LEFT JOIN cuisine_types ct ON ct.id = p.cuisine_type_id
 		LEFT JOIN place_categories pc ON pc.place_id = p.id
@@ -55,15 +56,23 @@ func (r *PlaceRepo) List(f PlaceFilter) ([]model.Place, error) {
 		args = append(args, f.City)
 		argIdx++
 	}
-	if f.CuisineTypeID > 0 {
-		conditions = append(conditions, fmt.Sprintf("p.cuisine_type_id = $%d", argIdx))
-		args = append(args, f.CuisineTypeID)
-		argIdx++
+	if len(f.CuisineTypeIDs) > 0 {
+		placeholders := make([]string, len(f.CuisineTypeIDs))
+		for i, id := range f.CuisineTypeIDs {
+			placeholders[i] = fmt.Sprintf("$%d", argIdx)
+			args = append(args, id)
+			argIdx++
+		}
+		conditions = append(conditions, fmt.Sprintf("p.cuisine_type_id IN (%s)", strings.Join(placeholders, ",")))
 	}
-	if f.CategoryID > 0 {
-		conditions = append(conditions, fmt.Sprintf("pc.category_id = $%d", argIdx))
-		args = append(args, f.CategoryID)
-		argIdx++
+	if len(f.CategoryIDs) > 0 {
+		placeholders := make([]string, len(f.CategoryIDs))
+		for i, id := range f.CategoryIDs {
+			placeholders[i] = fmt.Sprintf("$%d", argIdx)
+			args = append(args, id)
+			argIdx++
+		}
+		conditions = append(conditions, fmt.Sprintf("pc.category_id IN (%s)", strings.Join(placeholders, ",")))
 	}
 	if f.MinRating > 0 {
 		conditions = append(conditions, fmt.Sprintf(
@@ -87,6 +96,8 @@ func (r *PlaceRepo) List(f PlaceFilter) ([]model.Place, error) {
 	switch f.Sort {
 	case "rating":
 		query += " ORDER BY (COALESCE(rs.avg_food,0) + COALESCE(rs.avg_service,0) + COALESCE(rs.avg_vibe,0)) DESC"
+	case "rating_asc":
+		query += " ORDER BY (COALESCE(rs.avg_food,0) + COALESCE(rs.avg_service,0) + COALESCE(rs.avg_vibe,0)) ASC"
 	case "name":
 		query += " ORDER BY p.name"
 	default:
@@ -108,6 +119,7 @@ func (r *PlaceRepo) List(f PlaceFilter) ([]model.Place, error) {
 			&p.CuisineTypeID, &p.CuisineType, &p.Website,
 			&p.CreatedBy, &p.ImageURL, &p.CreatedAt, &p.UpdatedAt,
 			&avgFood, &avgService, &avgVibe, &p.ReviewCount,
+			&p.IsGemPlace,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("scan place: %w", err)
@@ -119,7 +131,20 @@ func (r *PlaceRepo) List(f PlaceFilter) ([]model.Place, error) {
 		}
 		places = append(places, p)
 	}
-	return places, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	// Load reviewers for each place
+	for i := range places {
+		reviewers, err := r.getReviewers(places[i].ID)
+		if err != nil {
+			return nil, err
+		}
+		places[i].Reviewers = reviewers
+	}
+
+	return places, nil
 }
 
 func (r *PlaceRepo) GetByID(id int) (*model.Place, error) {
@@ -130,7 +155,8 @@ func (r *PlaceRepo) GetByID(id int) (*model.Place, error) {
 			p.cuisine_type_id, ct.name AS cuisine_type, p.website,
 			p.created_by, p.image_url, p.created_at, p.updated_at,
 			COALESCE(rs.avg_food, 0), COALESCE(rs.avg_service, 0), COALESCE(rs.avg_vibe, 0),
-			COALESCE(rs.review_count, 0)
+			COALESCE(rs.review_count, 0),
+			EXISTS(SELECT 1 FROM reviews rv WHERE rv.place_id = p.id AND rv.is_gem = true) AS is_gem_place
 		FROM places p
 		LEFT JOIN cuisine_types ct ON ct.id = p.cuisine_type_id
 		LEFT JOIN (
@@ -147,6 +173,7 @@ func (r *PlaceRepo) GetByID(id int) (*model.Place, error) {
 		&p.CuisineTypeID, &p.CuisineType, &p.Website,
 		&p.CreatedBy, &p.ImageURL, &p.CreatedAt, &p.UpdatedAt,
 		&avgFood, &avgService, &avgVibe, &p.ReviewCount,
+		&p.IsGemPlace,
 	)
 	if err != nil {
 		return nil, err
@@ -171,6 +198,13 @@ func (r *PlaceRepo) GetByID(id int) (*model.Place, error) {
 		}
 		p.Categories = append(p.Categories, name)
 	}
+
+	// Load reviewers
+	reviewers, err := r.getReviewers(id)
+	if err != nil {
+		return nil, err
+	}
+	p.Reviewers = reviewers
 
 	return p, rows.Err()
 }
@@ -269,4 +303,29 @@ func (r *PlaceRepo) ListCities() ([]string, error) {
 		cities = append(cities, city)
 	}
 	return cities, rows.Err()
+}
+
+func (r *PlaceRepo) getReviewers(placeID int) ([]model.Reviewer, error) {
+	rows, err := r.db.Query(`
+		SELECT DISTINCT u.id, u.username
+		FROM users u
+		JOIN review_authors ra ON ra.user_id = u.id
+		JOIN reviews rv ON rv.id = ra.review_id
+		WHERE rv.place_id = $1
+		ORDER BY u.username
+	`, placeID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var reviewers []model.Reviewer
+	for rows.Next() {
+		var rev model.Reviewer
+		if err := rows.Scan(&rev.ID, &rev.Username); err != nil {
+			return nil, err
+		}
+		reviewers = append(reviewers, rev)
+	}
+	return reviewers, rows.Err()
 }

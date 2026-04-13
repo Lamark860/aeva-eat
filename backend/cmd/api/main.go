@@ -43,6 +43,7 @@ func main() {
 	placeRepo := repository.NewPlaceRepo(db)
 	catalogRepo := repository.NewCatalogRepo(db)
 	reviewRepo := repository.NewReviewRepo(db)
+	wishlistRepo := repository.NewWishlistRepo(db)
 
 	// Services
 	authService := service.NewAuthService(userRepo, cfg.JWTSecret)
@@ -52,6 +53,8 @@ func main() {
 	placeHandler := handler.NewPlaceHandler(placeRepo)
 	catalogHandler := handler.NewCatalogHandler(catalogRepo)
 	reviewHandler := handler.NewReviewHandler(reviewRepo)
+	wishlistHandler := handler.NewWishlistHandler(wishlistRepo)
+	suggestHandler := handler.NewSuggestHandler(cfg.GeosuggestKey)
 
 	// Router
 	r := chi.NewRouter()
@@ -94,15 +97,32 @@ func main() {
 			r.Post("/{id}/reviews", reviewHandler.Create)
 			r.Put("/{id}/reviews/{rid}", reviewHandler.Update)
 			r.Delete("/{id}/reviews/{rid}", reviewHandler.Delete)
+			r.Post("/{id}/reviews/{rid}/image", reviewHandler.UploadImage)
 		})
 	})
 
 	// User reviews
 	r.Get("/api/users/{userId}/reviews", reviewHandler.ListByUser)
 
+	// Wishlist
+	r.Route("/api/wishlist", func(r chi.Router) {
+		r.Use(middleware.JWTAuth(cfg.JWTSecret))
+		r.Get("/", wishlistHandler.ListMy)
+		r.Get("/ids", wishlistHandler.MyIDs)
+		r.Post("/{id}", wishlistHandler.Add)
+		r.Delete("/{id}", wishlistHandler.Remove)
+		// Custom free-text wishlist
+		r.Get("/custom", wishlistHandler.ListCustom)
+		r.Post("/custom", wishlistHandler.AddCustom)
+		r.Delete("/custom/{id}", wishlistHandler.DeleteCustom)
+	})
+
 	// Catalogs
 	r.Get("/api/cuisine-types", catalogHandler.ListCuisineTypes)
 	r.Get("/api/categories", catalogHandler.ListCategories)
+
+	// Geosuggest proxy
+	r.Get("/api/suggest", suggestHandler.Suggest)
 
 	addr := fmt.Sprintf(":%s", cfg.APIPort)
 	log.Printf("starting server on %s", addr)
@@ -115,6 +135,12 @@ func runMigrations(db *sql.DB) error {
 	files := []string{
 		"migrations/001_init.up.sql",
 		"migrations/002_place_image.up.sql",
+		"migrations/003_rating_float.up.sql",
+		"migrations/004_wishlist.up.sql",
+		"migrations/006_review_photos_custom_wishlist.up.sql",
+		"migrations/007_auth_username_login.up.sql",
+		"migrations/008_place_unique.up.sql",
+		"migrations/005_seed_data.up.sql",
 	}
 	for _, f := range files {
 		migrationSQL, err := os.ReadFile(f)

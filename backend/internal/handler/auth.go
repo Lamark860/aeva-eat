@@ -17,13 +17,13 @@ func NewAuthHandler(authService *service.AuthService) *AuthHandler {
 }
 
 type registerRequest struct {
-	Username string `json:"username"`
-	Email    string `json:"email"`
-	Password string `json:"password"`
+	Username    string `json:"username"`
+	DisplayName string `json:"display_name"`
+	Password    string `json:"password"`
 }
 
 type loginRequest struct {
-	Email    string `json:"email"`
+	Username string `json:"username"`
 	Password string `json:"password"`
 }
 
@@ -34,8 +34,8 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.Username == "" || req.Email == "" || req.Password == "" {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "username, email and password are required"})
+	if req.Username == "" || req.Password == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "username and password are required"})
 		return
 	}
 
@@ -44,7 +44,7 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user, token, err := h.authService.Register(req.Username, req.Email, req.Password)
+	user, token, err := h.authService.Register(req.Username, req.DisplayName, req.Password)
 	if err != nil {
 		if err == service.ErrUserExists {
 			writeJSON(w, http.StatusConflict, map[string]string{"error": err.Error()})
@@ -67,12 +67,12 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.Email == "" || req.Password == "" {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "email and password are required"})
+	if req.Username == "" || req.Password == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "username and password are required"})
 		return
 	}
 
-	user, token, err := h.authService.Login(req.Email, req.Password)
+	user, token, err := h.authService.Login(req.Username, req.Password)
 	if err != nil {
 		if err == service.ErrInvalidCredentials {
 			writeJSON(w, http.StatusUnauthorized, map[string]string{"error": err.Error()})

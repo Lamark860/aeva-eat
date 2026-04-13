@@ -45,13 +45,17 @@ func (h *PlaceHandler) List(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if v := q.Get("cuisine_type_id"); v != "" {
-		if id, err := strconv.Atoi(v); err == nil {
-			filter.CuisineTypeID = id
+		for _, s := range strings.Split(v, ",") {
+			if id, err := strconv.Atoi(strings.TrimSpace(s)); err == nil {
+				filter.CuisineTypeIDs = append(filter.CuisineTypeIDs, id)
+			}
 		}
 	}
 	if v := q.Get("category_id"); v != "" {
-		if id, err := strconv.Atoi(v); err == nil {
-			filter.CategoryID = id
+		for _, s := range strings.Split(v, ",") {
+			if id, err := strconv.Atoi(strings.TrimSpace(s)); err == nil {
+				filter.CategoryIDs = append(filter.CategoryIDs, id)
+			}
 		}
 	}
 	if v := q.Get("min_rating"); v != "" {
@@ -120,6 +124,10 @@ func (h *PlaceHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 	created, err := h.placeRepo.Create(place, req.CategoryIDs)
 	if err != nil {
+		if strings.Contains(err.Error(), "idx_places_name_city") {
+			writeJSON(w, http.StatusConflict, map[string]string{"error": "Такое заведение уже существует в этом городе"})
+			return
+		}
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to create place"})
 		return
 	}

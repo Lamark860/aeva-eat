@@ -11,8 +11,8 @@ import (
 )
 
 var (
-	ErrInvalidCredentials = errors.New("invalid email or password")
-	ErrUserExists         = errors.New("user with this email or username already exists")
+	ErrInvalidCredentials = errors.New("invalid username or password")
+	ErrUserExists         = errors.New("user with this username already exists")
 )
 
 type AuthService struct {
@@ -31,13 +31,13 @@ type TokenPair struct {
 	AccessToken string `json:"access_token"`
 }
 
-func (s *AuthService) Register(username, email, password string) (*model.User, *TokenPair, error) {
+func (s *AuthService) Register(username, displayName, password string) (*model.User, *TokenPair, error) {
 	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	user, err := s.userRepo.Create(username, email, string(hash))
+	user, err := s.userRepo.Create(username, displayName, string(hash))
 	if err != nil {
 		return nil, nil, ErrUserExists
 	}
@@ -50,8 +50,8 @@ func (s *AuthService) Register(username, email, password string) (*model.User, *
 	return user, &TokenPair{AccessToken: token}, nil
 }
 
-func (s *AuthService) Login(email, password string) (*model.User, *TokenPair, error) {
-	user, err := s.userRepo.GetByEmail(email)
+func (s *AuthService) Login(username, password string) (*model.User, *TokenPair, error) {
+	user, err := s.userRepo.GetByUsername(username)
 	if err != nil {
 		return nil, nil, ErrInvalidCredentials
 	}

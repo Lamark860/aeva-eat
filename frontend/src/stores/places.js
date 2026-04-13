@@ -8,8 +8,8 @@ export const usePlacesStore = defineStore('places', () => {
   const loading = ref(false)
   const filters = ref({
     city: '',
-    cuisine_type_id: '',
-    category_id: '',
+    cuisine_type_ids: [],
+    category_ids: [],
     min_rating: '',
     is_gem: false,
     search: '',
@@ -21,7 +21,9 @@ export const usePlacesStore = defineStore('places', () => {
     try {
       const params = {}
       Object.entries(filters.value).forEach(([key, val]) => {
-        if (val !== '' && val !== false && val !== null) {
+        if (Array.isArray(val)) {
+          if (val.length > 0) params[key === 'cuisine_type_ids' ? 'cuisine_type_id' : key === 'category_ids' ? 'category_id' : key] = val.join(',')
+        } else if (val !== '' && val !== false && val !== null) {
           params[key] = val
         }
       })

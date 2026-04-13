@@ -44,5 +44,16 @@ export const useReviewsStore = defineStore('reviews', () => {
     reviews.value = reviews.value.filter(r => r.id !== reviewId)
   }
 
-  return { reviews, loading, fetchByPlace, fetchByUser, createReview, updateReview, deleteReview }
+  async function uploadReviewImage(placeId, reviewId, file) {
+    const formData = new FormData()
+    formData.append('image', file)
+    const { data } = await http.post(`/places/${placeId}/reviews/${reviewId}/image`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    })
+    const idx = reviews.value.findIndex(r => r.id === reviewId)
+    if (idx !== -1) reviews.value[idx].image_url = data.image_url
+    return data
+  }
+
+  return { reviews, loading, fetchByPlace, fetchByUser, createReview, updateReview, deleteReview, uploadReviewImage }
 })

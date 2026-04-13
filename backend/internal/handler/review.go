@@ -3,13 +3,17 @@ package handler
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strconv"
 
 	"github.com/aeva-eat/backend/internal/middleware"
 	"github.com/aeva-eat/backend/internal/model"
 	"github.com/aeva-eat/backend/internal/repository"
 	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
 )
 
 type ReviewHandler struct {
@@ -21,9 +25,9 @@ func NewReviewHandler(reviewRepo *repository.ReviewRepo) *ReviewHandler {
 }
 
 type createReviewRequest struct {
-	FoodRating    int     `json:"food_rating"`
-	ServiceRating int     `json:"service_rating"`
-	VibeRating    int     `json:"vibe_rating"`
+	FoodRating    float64 `json:"food_rating"`
+	ServiceRating float64 `json:"service_rating"`
+	VibeRating    float64 `json:"vibe_rating"`
 	IsGem         bool    `json:"is_gem"`
 	Comment       *string `json:"comment,omitempty"`
 	VisitedAt     *string `json:"visited_at,omitempty"`
@@ -202,18 +206,90 @@ func (h *ReviewHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
 }
 
-func validateRatings(food, service, vibe int) error {
+func validateRatings(food, service, vibe float64) error {
 	for _, v := range []struct {
 		name string
-		val  int
+		val  float64
 	}{
 		{"food_rating", food},
 		{"service_rating", service},
 		{"vibe_rating", vibe},
 	} {
-		if v.val < 1 || v.val > 10 {
-			return fmt.Errorf("%s must be between 1 and 10", v.name)
+		if v.val < 0 || v.val > 10 {
+			return fmt.Errorf("%s must be between 0 and 10", v.name)
 		}
 	}
 	return nil
+}
+
+func (h *ReviewHandler) UploadImage(w http.ResponseWriter, r *http.Request) {
+	userID, ok := middleware.GetUserID(r)
+	if !ok {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+		return
+	}
+
+	reviewID, err := strconv.Atoi(chi.URLParam(r, "rid"))
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid review id"})
+		return
+	}
+
+	isAuthor, err := h.reviewRepo.IsAuthor(reviewID, userID)
+	if err != nil {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "review not found"})
+		return
+	}
+	if !isAuthor {
+		writeJSON(w, http.StatusForbidden, map[string]string{"error": "you can only upload images for your own reviews"})
+		return
+	}
+
+	if err := r.ParseMultipartForm(5 << 20); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "file too large (max 5MB)"})
+		return
+	}
+
+	file, header, err := r.FormFile("image")
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "image field required"})
+		return
+	}
+	defer file.Close()
+
+	ct := header.Header.Get("Content-Type")
+	allowedTypes := map[string]string{"image/jpeg": ".jpg", "image/png": ".png", "image/webp": ".webp"}
+	ext, ok := allowedTypes[ct]
+	if !ok {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "only JPEG, PNG and WebP images are allowed"})
+		return
+	}
+
+	filename := fmt.Sprintf("%s%s", uuid.New().String(), ext)
+	uploadsDir := "uploads"
+	if err := os.MkdirAll(uploadsDir, 0o755); err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to create uploads directory"})
+		return
+	}
+
+	dst, err := os.Create(filepath.Join(uploadsDir, filename))
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to save image"})
+		return
+	}
+	defer dst.Close()
+
+	if _, err := io.Copy(dst, file); err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to write image"})
+		return
+	}
+
+	imageURL := "/uploads/" + filename
+	if err := h.reviewRepo.UpdateImageURL(reviewID, imageURL); err != nil {
+		os.Remove(filepath.Join(uploadsDir, filename))
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to update review image"})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]string{"image_url": imageURL})
 }

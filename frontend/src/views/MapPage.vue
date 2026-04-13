@@ -25,16 +25,20 @@
             </select>
           </div>
           <div class="col-md-2">
-            <select v-model="placesStore.filters.cuisine_type_id" class="form-select form-select-sm" @change="fetchFiltered">
-              <option value="">Все кухни</option>
-              <option v-for="ct in catalogs.cuisineTypes" :key="ct.id" :value="ct.id">{{ ct.name }}</option>
-            </select>
+            <MultiSelect
+              :modelValue="placesStore.filters.cuisine_type_ids"
+              @update:modelValue="v => { placesStore.filters.cuisine_type_ids = v; fetchFiltered() }"
+              :options="catalogs.cuisineTypes"
+              placeholder="Кухни"
+            />
           </div>
           <div class="col-md-2">
-            <select v-model="placesStore.filters.category_id" class="form-select form-select-sm" @change="fetchFiltered">
-              <option value="">Все категории</option>
-              <option v-for="cat in catalogs.categories" :key="cat.id" :value="cat.id">{{ cat.name }}</option>
-            </select>
+            <MultiSelect
+              :modelValue="placesStore.filters.category_ids"
+              @update:modelValue="v => { placesStore.filters.category_ids = v; fetchFiltered() }"
+              :options="catalogs.categories"
+              placeholder="Категории"
+            />
           </div>
           <div class="col-md-1 d-flex align-items-center">
             <div class="form-check">
@@ -67,6 +71,7 @@ import { useRouter } from 'vue-router'
 import { usePlacesStore } from '../stores/places'
 import { useCatalogsStore } from '../stores/catalogs'
 import MapView from '../components/MapView.vue'
+import MultiSelect from '../components/MultiSelect.vue'
 import http from '../api/http'
 
 const router = useRouter()

@@ -16,15 +16,15 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
-  async function register(username, email, password) {
-    const { data } = await http.post('/auth/register', { username, email, password })
+  async function register(username, displayName, password) {
+    const { data } = await http.post('/auth/register', { username, display_name: displayName, password })
     token.value = data.token.access_token
     user.value = data.user
     localStorage.setItem('token', token.value)
   }
 
-  async function login(email, password) {
-    const { data } = await http.post('/auth/login', { email, password })
+  async function login(username, password) {
+    const { data } = await http.post('/auth/login', { username, password })
     token.value = data.token.access_token
     user.value = data.user
     localStorage.setItem('token', token.value)
