@@ -44,9 +44,10 @@ func main() {
 	catalogRepo := repository.NewCatalogRepo(db)
 	reviewRepo := repository.NewReviewRepo(db)
 	wishlistRepo := repository.NewWishlistRepo(db)
+	inviteRepo := repository.NewInviteRepo(db)
 
 	// Services
-	authService := service.NewAuthService(userRepo, cfg.JWTSecret)
+	authService := service.NewAuthService(userRepo, inviteRepo, cfg.JWTSecret)
 
 	// Handlers
 	authHandler := handler.NewAuthHandler(authService)
@@ -55,6 +56,7 @@ func main() {
 	reviewHandler := handler.NewReviewHandler(reviewRepo)
 	wishlistHandler := handler.NewWishlistHandler(wishlistRepo)
 	suggestHandler := handler.NewSuggestHandler(cfg.GeosuggestKey)
+	inviteHandler := handler.NewInviteHandler(inviteRepo, userRepo)
 
 	// Router
 	r := chi.NewRouter()
@@ -80,16 +82,23 @@ func main() {
 		r.Post("/register", authHandler.Register)
 		r.Post("/login", authHandler.Login)
 		r.With(middleware.JWTAuth(cfg.JWTSecret)).Get("/me", authHandler.Me)
+		r.With(middleware.JWTAuth(cfg.JWTSecret)).Put("/password", authHandler.ChangePassword)
+		r.With(middleware.JWTAuth(cfg.JWTSecret)).Post("/avatar", authHandler.UploadAvatar)
 	})
 
-	// Places
-	r.Route("/api/places", func(r chi.Router) {
-		r.Get("/", placeHandler.List)
-		r.Get("/cities", placeHandler.ListCities)
-		r.Get("/{id}", placeHandler.GetByID)
-		r.Get("/{id}/reviews", reviewHandler.ListByPlace)
-		r.Group(func(r chi.Router) {
-			r.Use(middleware.JWTAuth(cfg.JWTSecret))
+	// Validate invite (public, no auth needed)
+	r.Get("/api/invites/validate/{code}", inviteHandler.ValidateCode)
+
+	// All data routes require auth
+	r.Group(func(r chi.Router) {
+		r.Use(middleware.JWTAuth(cfg.JWTSecret))
+
+		// Places
+		r.Route("/api/places", func(r chi.Router) {
+			r.Get("/", placeHandler.List)
+			r.Get("/cities", placeHandler.ListCities)
+			r.Get("/{id}", placeHandler.GetByID)
+			r.Get("/{id}/reviews", reviewHandler.ListByPlace)
 			r.Post("/", placeHandler.Create)
 			r.Put("/{id}", placeHandler.Update)
 			r.Delete("/{id}", placeHandler.Delete)
@@ -98,31 +107,41 @@ func main() {
 			r.Put("/{id}/reviews/{rid}", reviewHandler.Update)
 			r.Delete("/{id}/reviews/{rid}", reviewHandler.Delete)
 			r.Post("/{id}/reviews/{rid}/image", reviewHandler.UploadImage)
+			r.Post("/{id}/reviews/{rid}/video", reviewHandler.UploadVideo)
 		})
+
+		// User reviews
+		r.Get("/api/users/{userId}/reviews", reviewHandler.ListByUser)
+
+		// Wishlist
+		r.Route("/api/wishlist", func(r chi.Router) {
+			r.Get("/", wishlistHandler.ListMy)
+			r.Get("/ids", wishlistHandler.MyIDs)
+			r.Post("/{id}", wishlistHandler.Add)
+			r.Delete("/{id}", wishlistHandler.Remove)
+			r.Get("/custom", wishlistHandler.ListCustom)
+			r.Post("/custom", wishlistHandler.AddCustom)
+			r.Delete("/custom/{id}", wishlistHandler.DeleteCustom)
+		})
+
+		// Catalogs
+		r.Get("/api/cuisine-types", catalogHandler.ListCuisineTypes)
+		r.Get("/api/categories", catalogHandler.ListCategories)
+
+		// Geosuggest proxy
+		r.Get("/api/suggest", suggestHandler.Suggest)
+
+		// Invites
+		r.Route("/api/invites", func(r chi.Router) {
+			r.Get("/", inviteHandler.ListMy)
+			r.Post("/", inviteHandler.Create)
+			r.Delete("/{id}", inviteHandler.Delete)
+			r.Get("/all", inviteHandler.ListAll) // superuser only
+		})
+
+		// Admin
+		r.Get("/api/admin/users", inviteHandler.ListUsers) // superuser only
 	})
-
-	// User reviews
-	r.Get("/api/users/{userId}/reviews", reviewHandler.ListByUser)
-
-	// Wishlist
-	r.Route("/api/wishlist", func(r chi.Router) {
-		r.Use(middleware.JWTAuth(cfg.JWTSecret))
-		r.Get("/", wishlistHandler.ListMy)
-		r.Get("/ids", wishlistHandler.MyIDs)
-		r.Post("/{id}", wishlistHandler.Add)
-		r.Delete("/{id}", wishlistHandler.Remove)
-		// Custom free-text wishlist
-		r.Get("/custom", wishlistHandler.ListCustom)
-		r.Post("/custom", wishlistHandler.AddCustom)
-		r.Delete("/custom/{id}", wishlistHandler.DeleteCustom)
-	})
-
-	// Catalogs
-	r.Get("/api/cuisine-types", catalogHandler.ListCuisineTypes)
-	r.Get("/api/categories", catalogHandler.ListCategories)
-
-	// Geosuggest proxy
-	r.Get("/api/suggest", suggestHandler.Suggest)
 
 	addr := fmt.Sprintf(":%s", cfg.APIPort)
 	log.Printf("starting server on %s", addr)
@@ -140,6 +159,8 @@ func runMigrations(db *sql.DB) error {
 		"migrations/006_review_photos_custom_wishlist.up.sql",
 		"migrations/007_auth_username_login.up.sql",
 		"migrations/008_place_unique.up.sql",
+		"migrations/009_invites_roles.up.sql",
+		"migrations/010_review_video.up.sql",
 		"migrations/005_seed_data.up.sql",
 	}
 	for _, f := range files {

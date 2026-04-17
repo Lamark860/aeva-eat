@@ -3,13 +3,13 @@ package handler
 import (
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
 
+	"github.com/aeva-eat/backend/internal/imageutil"
 	"github.com/aeva-eat/backend/internal/middleware"
 	"github.com/aeva-eat/backend/internal/model"
 	"github.com/aeva-eat/backend/internal/repository"
@@ -68,15 +68,35 @@ func (h *PlaceHandler) List(w http.ResponseWriter, r *http.Request) {
 		filter.IsGem = &isGem
 	}
 
-	places, err := h.placeRepo.List(filter)
+	// Pagination
+	limit := 20
+	if v := q.Get("limit"); v != "" {
+		if l, err := strconv.Atoi(v); err == nil {
+			if l == 0 {
+				limit = 0
+			} else if l > 0 && l <= 100 {
+				limit = l
+			}
+		}
+	}
+	page := 1
+	if v := q.Get("page"); v != "" {
+		if p, err := strconv.Atoi(v); err == nil && p > 0 {
+			page = p
+		}
+	}
+	filter.Limit = limit
+	filter.Offset = (page - 1) * limit
+
+	result, err := h.placeRepo.List(filter)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to list places"})
 		return
 	}
-	if places == nil {
-		places = []model.Place{}
+	if result.Places == nil {
+		result.Places = []model.Place{}
 	}
-	writeJSON(w, http.StatusOK, places)
+	writeJSON(w, http.StatusOK, result)
 }
 
 func (h *PlaceHandler) GetByID(w http.ResponseWriter, r *http.Request) {
@@ -167,6 +187,13 @@ func (h *PlaceHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Preserve existing image_url
+	existing, _ := h.placeRepo.GetByID(id)
+	var imageURL *string
+	if existing != nil {
+		imageURL = existing.ImageURL
+	}
+
 	place := &model.Place{
 		ID:            id,
 		Name:          req.Name,
@@ -176,6 +203,7 @@ func (h *PlaceHandler) Update(w http.ResponseWriter, r *http.Request) {
 		Lng:           req.Lng,
 		CuisineTypeID: req.CuisineTypeID,
 		Website:       req.Website,
+		ImageURL:      imageURL,
 	}
 
 	updated, err := h.placeRepo.Update(place, req.CategoryIDs)
@@ -271,13 +299,13 @@ func (h *PlaceHandler) UploadImage(w http.ResponseWriter, r *http.Request) {
 	defer file.Close()
 
 	ct := header.Header.Get("Content-Type")
-	ext, ok := allowedImageTypes[ct]
-	if !ok {
+	if _, ok := allowedImageTypes[ct]; !ok {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "only JPEG, PNG and WebP images are allowed"})
 		return
 	}
 
-	filename := fmt.Sprintf("%s%s", uuid.New().String(), ext)
+	// Always save as .jpg after processing
+	filename := fmt.Sprintf("%s.jpg", uuid.New().String())
 
 	uploadsDir := "uploads"
 	if err := os.MkdirAll(uploadsDir, 0o755); err != nil {
@@ -285,15 +313,9 @@ func (h *PlaceHandler) UploadImage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	dst, err := os.Create(filepath.Join(uploadsDir, filename))
-	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to save image"})
-		return
-	}
-	defer dst.Close()
-
-	if _, err := io.Copy(dst, file); err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to write image"})
+	dstPath := filepath.Join(uploadsDir, filename)
+	if err := imageutil.Process(file, dstPath); err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to process image"})
 		return
 	}
 
@@ -303,7 +325,7 @@ func (h *PlaceHandler) UploadImage(w http.ResponseWriter, r *http.Request) {
 	oldPlace, _ := h.placeRepo.GetByID(id)
 
 	if err := h.placeRepo.UpdateImageURL(id, imageURL); err != nil {
-		os.Remove(filepath.Join(uploadsDir, filename))
+		os.Remove(dstPath)
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to update image"})
 		return
 	}

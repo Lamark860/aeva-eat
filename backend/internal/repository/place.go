@@ -24,16 +24,17 @@ type PlaceFilter struct {
 	IsGem          *bool
 	Search         string
 	Sort           string
+	Limit          int
+	Offset         int
 }
 
-func (r *PlaceRepo) List(f PlaceFilter) ([]model.Place, error) {
-	query := `
-		SELECT DISTINCT p.id, p.name, p.address, p.city, p.lat, p.lng,
-			p.cuisine_type_id, ct.name AS cuisine_type, p.website,
-			p.created_by, p.image_url, p.created_at, p.updated_at,
-			COALESCE(rs.avg_food, 0), COALESCE(rs.avg_service, 0), COALESCE(rs.avg_vibe, 0),
-			COALESCE(rs.review_count, 0),
-			EXISTS(SELECT 1 FROM reviews rv WHERE rv.place_id = p.id AND rv.is_gem = true) AS is_gem_place
+type PlaceListResult struct {
+	Places []model.Place `json:"places"`
+	Total  int           `json:"total"`
+}
+
+func (r *PlaceRepo) List(f PlaceFilter) (*PlaceListResult, error) {
+	baseFrom := `
 		FROM places p
 		LEFT JOIN cuisine_types ct ON ct.id = p.cuisine_type_id
 		LEFT JOIN place_categories pc ON pc.place_id = p.id
@@ -89,9 +90,27 @@ func (r *PlaceRepo) List(f PlaceFilter) ([]model.Place, error) {
 		argIdx++
 	}
 
+	whereClause := ""
 	if len(conditions) > 0 {
-		query += " WHERE " + strings.Join(conditions, " AND ")
+		whereClause = " WHERE " + strings.Join(conditions, " AND ")
 	}
+
+	// Count total
+	var total int
+	countQuery := "SELECT COUNT(DISTINCT p.id) " + baseFrom + whereClause
+	if err := r.db.QueryRow(countQuery, args...).Scan(&total); err != nil {
+		return nil, fmt.Errorf("count places: %w", err)
+	}
+
+	// Main query
+	query := `
+		SELECT DISTINCT p.id, p.name, p.address, p.city, p.lat, p.lng,
+			p.cuisine_type_id, ct.name AS cuisine_type, p.website,
+			p.created_by, p.image_url, p.created_at, p.updated_at,
+			COALESCE(rs.avg_food, 0), COALESCE(rs.avg_service, 0), COALESCE(rs.avg_vibe, 0),
+			COALESCE(rs.review_count, 0),
+			EXISTS(SELECT 1 FROM reviews rv WHERE rv.place_id = p.id AND rv.is_gem = true) AS is_gem_place
+	` + baseFrom + whereClause
 
 	switch f.Sort {
 	case "rating":
@@ -102,6 +121,11 @@ func (r *PlaceRepo) List(f PlaceFilter) ([]model.Place, error) {
 		query += " ORDER BY p.name"
 	default:
 		query += " ORDER BY p.created_at DESC"
+	}
+
+	if f.Limit > 0 {
+		query += fmt.Sprintf(" LIMIT $%d OFFSET $%d", argIdx, argIdx+1)
+		args = append(args, f.Limit, f.Offset)
 	}
 
 	rows, err := r.db.Query(query, args...)
@@ -144,7 +168,7 @@ func (r *PlaceRepo) List(f PlaceFilter) ([]model.Place, error) {
 		places[i].Reviewers = reviewers
 	}
 
-	return places, nil
+	return &PlaceListResult{Places: places, Total: total}, nil
 }
 
 func (r *PlaceRepo) GetByID(id int) (*model.Place, error) {

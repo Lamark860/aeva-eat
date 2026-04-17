@@ -86,11 +86,11 @@ const placesWithCoords = computed(() =>
 let debounceTimer = null
 function debouncedFetch() {
   clearTimeout(debounceTimer)
-  debounceTimer = setTimeout(() => placesStore.fetchPlaces(), 300)
+  debounceTimer = setTimeout(() => placesStore.fetchAllPlaces(), 300)
 }
 
 function fetchFiltered() {
-  placesStore.fetchPlaces()
+  placesStore.fetchAllPlaces()
 }
 
 function onMarkerClick(place) {
@@ -107,6 +107,6 @@ async function fetchCities() {
 onMounted(async () => {
   await catalogs.fetchAll()
   await fetchCities()
-  await placesStore.fetchPlaces()
+  await placesStore.fetchAllPlaces()
 })
 </script>

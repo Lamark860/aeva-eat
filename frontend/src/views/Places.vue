@@ -85,11 +85,31 @@
         <PlaceCard :place="place" />
       </div>
     </div>
+
+    <!-- Pagination -->
+    <nav v-if="totalPages > 1" class="mt-4 d-flex justify-content-center">
+      <ul class="pagination">
+        <li class="page-item" :class="{ disabled: placesStore.page <= 1 }">
+          <a class="page-link" href="#" @click.prevent="goToPage(placesStore.page - 1)">«</a>
+        </li>
+        <li
+          v-for="p in visiblePages"
+          :key="p"
+          class="page-item"
+          :class="{ active: p === placesStore.page }"
+        >
+          <a class="page-link" href="#" @click.prevent="goToPage(p)">{{ p }}</a>
+        </li>
+        <li class="page-item" :class="{ disabled: placesStore.page >= totalPages }">
+          <a class="page-link" href="#" @click.prevent="goToPage(placesStore.page + 1)">»</a>
+        </li>
+      </ul>
+    </nav>
   </div>
 </template>
 
 <script setup>
-import { onMounted, ref } from 'vue'
+import { onMounted, ref, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { usePlacesStore } from '../stores/places'
 import { useCatalogsStore } from '../stores/catalogs'
@@ -116,6 +136,7 @@ function loadFiltersFromURL() {
   placesStore.filters.sort = q.sort || ''
   placesStore.filters.is_gem = q.is_gem === 'true'
   placesStore.filters.min_rating = q.min_rating || ''
+  if (q.page) placesStore.page = parseInt(q.page) || 1
 }
 
 function syncFiltersToURL() {
@@ -127,16 +148,41 @@ function syncFiltersToURL() {
       params[key] = String(val)
     }
   })
+  if (placesStore.page > 1) params.page = String(placesStore.page)
   router.replace({ query: params })
+}
+
+const totalPages = computed(() => Math.ceil(placesStore.total / placesStore.limit) || 1)
+
+const visiblePages = computed(() => {
+  const pages = []
+  const tp = totalPages.value
+  const cp = placesStore.page
+  let start = Math.max(1, cp - 2)
+  let end = Math.min(tp, cp + 2)
+  if (end - start < 4) {
+    if (start === 1) end = Math.min(tp, start + 4)
+    else start = Math.max(1, end - 4)
+  }
+  for (let i = start; i <= end; i++) pages.push(i)
+  return pages
+})
+
+function goToPage(p) {
+  if (p < 1 || p > totalPages.value) return
+  placesStore.page = p
+  syncFiltersToURL()
+  placesStore.fetchPlaces()
 }
 
 let debounceTimer = null
 function debouncedFetch() {
   clearTimeout(debounceTimer)
-  debounceTimer = setTimeout(() => { syncFiltersToURL(); placesStore.fetchPlaces() }, 300)
+  debounceTimer = setTimeout(() => { placesStore.page = 1; syncFiltersToURL(); placesStore.fetchPlaces() }, 300)
 }
 
 function fetchFiltered() {
+  placesStore.page = 1
   syncFiltersToURL()
   placesStore.fetchPlaces()
 }

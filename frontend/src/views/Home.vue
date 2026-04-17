@@ -14,8 +14,7 @@
           <router-link to="/map" class="btn btn-outline-secondary btn-lg">Открыть карту</router-link>
         </template>
         <template v-else>
-          <router-link to="/register" class="btn btn-primary btn-lg">Начать</router-link>
-          <router-link to="/login" class="btn btn-outline-secondary btn-lg">Уже есть аккаунт</router-link>
+          <router-link to="/login" class="btn btn-primary btn-lg">Войти</router-link>
         </template>
       </div>
     </section>
@@ -69,15 +68,16 @@ const stats = ref(null)
 
 onMounted(async () => {
   try {
-    const { data } = await http.get('/places', { params: { sort: '', limit: 6 } })
-    recentPlaces.value = data || []
+    const { data: recent } = await http.get('/places', { params: { sort: '', limit: 6 } })
+    recentPlaces.value = recent.places || []
 
-    // Calculate basic stats from places list
-    const allPlaces = (await http.get('/places')).data || []
+    // Calculate basic stats from all places
+    const { data: all } = await http.get('/places', { params: { limit: 0 } })
+    const allPlaces = all.places || []
     const totalReviews = allPlaces.reduce((sum, p) => sum + (p.review_count || 0), 0)
     const gems = allPlaces.filter(p => p.is_gem_place).length
     stats.value = {
-      placeCount: allPlaces.length,
+      placeCount: all.total || allPlaces.length,
       reviewCount: totalReviews,
       gemCount: gems
     }

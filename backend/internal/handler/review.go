@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strconv"
 
+	"github.com/aeva-eat/backend/internal/imageutil"
 	"github.com/aeva-eat/backend/internal/middleware"
 	"github.com/aeva-eat/backend/internal/model"
 	"github.com/aeva-eat/backend/internal/repository"
@@ -259,9 +260,79 @@ func (h *ReviewHandler) UploadImage(w http.ResponseWriter, r *http.Request) {
 
 	ct := header.Header.Get("Content-Type")
 	allowedTypes := map[string]string{"image/jpeg": ".jpg", "image/png": ".png", "image/webp": ".webp"}
-	ext, ok := allowedTypes[ct]
-	if !ok {
+	if _, ok := allowedTypes[ct]; !ok {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "only JPEG, PNG and WebP images are allowed"})
+		return
+	}
+
+	filename := fmt.Sprintf("%s.jpg", uuid.New().String())
+	uploadsDir := "uploads"
+	if err := os.MkdirAll(uploadsDir, 0o755); err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to create uploads directory"})
+		return
+	}
+
+	dstPath := filepath.Join(uploadsDir, filename)
+	if err := imageutil.Process(file, dstPath); err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to process image"})
+		return
+	}
+
+	imageURL := "/uploads/" + filename
+	if err := h.reviewRepo.UpdateImageURL(reviewID, imageURL); err != nil {
+		os.Remove(dstPath)
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to update review image"})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]string{"image_url": imageURL})
+}
+
+var allowedVideoTypes = map[string]string{
+	"video/mp4":  ".mp4",
+	"video/webm": ".webm",
+}
+
+func (h *ReviewHandler) UploadVideo(w http.ResponseWriter, r *http.Request) {
+	userID, ok := middleware.GetUserID(r)
+	if !ok {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+		return
+	}
+
+	reviewID, err := strconv.Atoi(chi.URLParam(r, "rid"))
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid review id"})
+		return
+	}
+
+	isAuthor, err := h.reviewRepo.IsAuthor(reviewID, userID)
+	if err != nil {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "review not found"})
+		return
+	}
+	if !isAuthor {
+		writeJSON(w, http.StatusForbidden, map[string]string{"error": "you can only upload videos for your own reviews"})
+		return
+	}
+
+	// 20MB max for video
+	if err := r.ParseMultipartForm(20 << 20); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "file too large (max 20MB)"})
+		return
+	}
+
+	file, header, err := r.FormFile("video")
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "video field required"})
+		return
+	}
+	defer file.Close()
+
+	ct := header.Header.Get("Content-Type")
+	ext, ok := allowedVideoTypes[ct]
+	if !ok {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "only MP4 and WebM videos are allowed"})
 		return
 	}
 
@@ -274,22 +345,22 @@ func (h *ReviewHandler) UploadImage(w http.ResponseWriter, r *http.Request) {
 
 	dst, err := os.Create(filepath.Join(uploadsDir, filename))
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to save image"})
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to save video"})
 		return
 	}
 	defer dst.Close()
 
 	if _, err := io.Copy(dst, file); err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to write image"})
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to write video"})
 		return
 	}
 
-	imageURL := "/uploads/" + filename
-	if err := h.reviewRepo.UpdateImageURL(reviewID, imageURL); err != nil {
+	videoURL := "/uploads/" + filename
+	if err := h.reviewRepo.UpdateVideoURL(reviewID, videoURL); err != nil {
 		os.Remove(filepath.Join(uploadsDir, filename))
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to update review image"})
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to update review video"})
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]string{"image_url": imageURL})
+	writeJSON(w, http.StatusOK, map[string]string{"video_url": videoURL})
 }

@@ -4,6 +4,9 @@ import http from '../api/http'
 
 export const usePlacesStore = defineStore('places', () => {
   const places = ref([])
+  const total = ref(0)
+  const page = ref(1)
+  const limit = ref(20)
   const currentPlace = ref(null)
   const loading = ref(false)
   const filters = ref({
@@ -16,19 +19,40 @@ export const usePlacesStore = defineStore('places', () => {
     sort: ''
   })
 
+  function _buildParams() {
+    const params = {}
+    Object.entries(filters.value).forEach(([key, val]) => {
+      if (Array.isArray(val)) {
+        if (val.length > 0) params[key === 'cuisine_type_ids' ? 'cuisine_type_id' : key === 'category_ids' ? 'category_id' : key] = val.join(',')
+      } else if (val !== '' && val !== false && val !== null) {
+        params[key] = val
+      }
+    })
+    return params
+  }
+
   async function fetchPlaces() {
     loading.value = true
     try {
-      const params = {}
-      Object.entries(filters.value).forEach(([key, val]) => {
-        if (Array.isArray(val)) {
-          if (val.length > 0) params[key === 'cuisine_type_ids' ? 'cuisine_type_id' : key === 'category_ids' ? 'category_id' : key] = val.join(',')
-        } else if (val !== '' && val !== false && val !== null) {
-          params[key] = val
-        }
-      })
+      const params = _buildParams()
+      params.limit = limit.value
+      params.page = page.value
       const { data } = await http.get('/places', { params })
-      places.value = data
+      places.value = data.places || []
+      total.value = data.total || 0
+    } finally {
+      loading.value = false
+    }
+  }
+
+  async function fetchAllPlaces() {
+    loading.value = true
+    try {
+      const params = _buildParams()
+      params.limit = 0
+      const { data } = await http.get('/places', { params })
+      places.value = data.places || []
+      total.value = data.total || 0
     } finally {
       loading.value = false
     }
@@ -76,5 +100,5 @@ export const usePlacesStore = defineStore('places', () => {
     return data
   }
 
-  return { places, currentPlace, loading, filters, fetchPlaces, fetchPlace, createPlace, updatePlace, deletePlace, uploadImage }
+  return { places, total, page, limit, currentPlace, loading, filters, fetchPlaces, fetchAllPlaces, fetchPlace, createPlace, updatePlace, deletePlace, uploadImage }
 })

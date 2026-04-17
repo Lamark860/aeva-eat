@@ -8,8 +8,20 @@ type User struct {
 	DisplayName  *string   `json:"display_name,omitempty"`
 	PasswordHash string    `json:"-"`
 	AvatarURL    *string   `json:"avatar_url,omitempty"`
+	Role         string    `json:"role"`
 	CreatedAt    time.Time `json:"created_at"`
 	UpdatedAt    time.Time `json:"updated_at"`
+}
+
+type Invite struct {
+	ID          int        `json:"id"`
+	Code        string     `json:"code"`
+	CreatedBy   int        `json:"created_by"`
+	CreatorName string     `json:"creator_name,omitempty"`
+	UsedBy      *int       `json:"used_by,omitempty"`
+	UsedAt      *time.Time `json:"used_at,omitempty"`
+	ExpiresAt   *time.Time `json:"expires_at,omitempty"`
+	CreatedAt   time.Time  `json:"created_at"`
 }
 
 type Place struct {
@@ -50,6 +62,7 @@ type Review struct {
 	IsGem         bool      `json:"is_gem"`
 	Comment       *string   `json:"comment,omitempty"`
 	ImageURL      *string   `json:"image_url,omitempty"`
+	VideoURL      *string   `json:"video_url,omitempty"`
 	VisitedAt     *string   `json:"visited_at,omitempty"`
 	Authors       []User    `json:"authors"`
 	CreatedAt     time.Time `json:"created_at"`

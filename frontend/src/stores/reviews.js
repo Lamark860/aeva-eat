@@ -55,5 +55,16 @@ export const useReviewsStore = defineStore('reviews', () => {
     return data
   }
 
-  return { reviews, loading, fetchByPlace, fetchByUser, createReview, updateReview, deleteReview, uploadReviewImage }
+  async function uploadReviewVideo(placeId, reviewId, blob) {
+    const formData = new FormData()
+    formData.append('video', blob, 'video.webm')
+    const { data } = await http.post(`/places/${placeId}/reviews/${reviewId}/video`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    })
+    const idx = reviews.value.findIndex(r => r.id === reviewId)
+    if (idx !== -1) reviews.value[idx].video_url = data.video_url
+    return data
+  }
+
+  return { reviews, loading, fetchByPlace, fetchByUser, createReview, updateReview, deleteReview, uploadReviewImage, uploadReviewVideo }
 })

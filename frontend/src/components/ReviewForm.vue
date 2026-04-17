@@ -49,6 +49,19 @@
           <input ref="photoInput" type="file" accept="image/*" class="d-none" @change="onPhotoSelect" />
         </div>
 
+        <div class="mb-3">
+          <label class="form-label">Видеосообщение</label>
+          <div v-if="existingVideoUrl && !videoFile" class="mb-2">
+            <div class="video-circle-sm mx-auto">
+              <video :src="existingVideoUrl" class="video-preview-sm" playsinline loop muted autoplay></video>
+            </div>
+            <div class="text-center mt-1">
+              <button type="button" class="btn btn-sm btn-outline-secondary" @click="existingVideoUrl = null">Удалить</button>
+            </div>
+          </div>
+          <VideoRecorder v-else :uploading="loading" @recorded="onVideoRecorded" />
+        </div>
+
         <div class="d-flex gap-2">
           <button type="submit" class="btn btn-primary" :disabled="loading || !isValid">
             <span v-if="loading" class="spinner-border spinner-border-sm me-1"></span>
@@ -66,6 +79,7 @@
 <script setup>
 import { ref, computed } from 'vue'
 import RatingInput from './RatingInput.vue'
+import VideoRecorder from './VideoRecorder.vue'
 
 const props = defineProps({
   review: { type: Object, default: null },
@@ -89,6 +103,8 @@ const error = ref('')
 const loading = ref(false)
 const photoFile = ref(null)
 const photoPreview = ref(null)
+const videoFile = ref(null)
+const existingVideoUrl = ref(props.review?.video_url || null)
 
 const isValid = computed(() =>
   form.value.food_rating >= 0 && form.value.service_rating >= 0 && form.value.vibe_rating >= 0
@@ -117,21 +133,20 @@ function onPhotoDrop(e) {
   if (file && file.type.startsWith('image/')) { photoFile.value = file; photoPreview.value = URL.createObjectURL(file) }
 }
 
+function onVideoRecorded(blob) {
+  videoFile.value = blob
+}
+
 async function handleSubmit() {
   error.value = ''
   loading.value = true
-  try {
-    emit('submitted', {
-      ...form.value,
-      comment: form.value.comment || undefined,
-      visited_at: form.value.visited_at || undefined,
-      _photoFile: photoFile.value || undefined
-    })
-  } catch (e) {
-    error.value = e.response?.data?.error || 'Ошибка'
-  } finally {
-    loading.value = false
-  }
+  emit('submitted', {
+    ...form.value,
+    comment: form.value.comment || undefined,
+    visited_at: form.value.visited_at || undefined,
+    _photoFile: photoFile.value || undefined,
+    _videoFile: videoFile.value || undefined
+  })
 }
 </script>
 
@@ -154,6 +169,19 @@ async function handleSubmit() {
   max-height: 150px;
   max-width: 100%;
   border-radius: 0.4rem;
+  object-fit: cover;
+}
+.video-circle-sm {
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  overflow: hidden;
+  background: #000;
+  border: 2px solid #dee2e6;
+}
+.video-preview-sm {
+  width: 100%;
+  height: 100%;
   object-fit: cover;
 }
 </style>

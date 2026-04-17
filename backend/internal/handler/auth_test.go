@@ -2,10 +2,13 @@ package handler
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/aeva-eat/backend/internal/middleware"
 )
 
 func TestWriteJSON(t *testing.T) {
@@ -81,5 +84,68 @@ func TestLogin_BadRequest(t *testing.T) {
 				t.Errorf("expected %d, got %d", tt.code, w.Code)
 			}
 		})
+	}
+}
+
+func withUserID(r *http.Request, userID int) *http.Request {
+	ctx := context.WithValue(r.Context(), middleware.UserIDKey, userID)
+	return r.WithContext(ctx)
+}
+
+func TestChangePassword_BadRequest(t *testing.T) {
+	h := &AuthHandler{authService: nil}
+
+	tests := []struct {
+		name string
+		body string
+		code int
+	}{
+		{"invalid json", `{bad`, http.StatusBadRequest},
+		{"empty body", `{}`, http.StatusBadRequest},
+		{"missing new_password", `{"old_password":"old"}`, http.StatusBadRequest},
+		{"missing old_password", `{"new_password":"newpwd"}`, http.StatusBadRequest},
+		{"short new_password", `{"old_password":"old","new_password":"12345"}`, http.StatusBadRequest},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest("PUT", "/api/auth/password", bytes.NewBufferString(tt.body))
+			req.Header.Set("Content-Type", "application/json")
+			req = withUserID(req, 1)
+			w := httptest.NewRecorder()
+
+			h.ChangePassword(w, req)
+
+			if w.Code != tt.code {
+				t.Errorf("expected %d, got %d", tt.code, w.Code)
+			}
+		})
+	}
+}
+
+func TestChangePassword_NoAuth(t *testing.T) {
+	h := &AuthHandler{authService: nil}
+
+	req := httptest.NewRequest("PUT", "/api/auth/password", bytes.NewBufferString(`{"old_password":"old","new_password":"newpwd"}`))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	h.ChangePassword(w, req)
+
+	if w.Code != http.StatusUnauthorized {
+		t.Errorf("expected 401, got %d", w.Code)
+	}
+}
+
+func TestUploadAvatar_NoAuth(t *testing.T) {
+	h := &AuthHandler{authService: nil}
+
+	req := httptest.NewRequest("POST", "/api/auth/avatar", nil)
+	w := httptest.NewRecorder()
+
+	h.UploadAvatar(w, req)
+
+	if w.Code != http.StatusUnauthorized {
+		t.Errorf("expected 401, got %d", w.Code)
 	}
 }

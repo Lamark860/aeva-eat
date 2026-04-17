@@ -10,8 +10,11 @@
         </button>
         <div class="collapse navbar-collapse" id="navMain">
           <div class="navbar-nav me-auto">
-            <router-link class="nav-link" to="/places">Заведения</router-link>
-            <router-link class="nav-link" to="/map">Карта</router-link>
+            <template v-if="auth.isAuthenticated">
+              <router-link class="nav-link" to="/places">Заведения</router-link>
+              <router-link class="nav-link" to="/map">Карта</router-link>
+              <router-link class="nav-link" to="/invites">Пригласить</router-link>
+            </template>
           </div>
           <div class="navbar-nav ms-auto align-items-center">
             <template v-if="auth.isAuthenticated">
@@ -20,10 +23,6 @@
                 {{ auth.user?.username }}
               </router-link>
               <button class="btn btn-outline-secondary btn-sm ms-2" @click="logout">Выйти</button>
-            </template>
-            <template v-else>
-              <router-link class="nav-link" to="/login">Войти</router-link>
-              <router-link class="btn btn-primary btn-sm ms-2" to="/register">Регистрация</router-link>
             </template>
           </div>
         </div>

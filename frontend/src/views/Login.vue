@@ -38,9 +38,8 @@
             </button>
           </form>
 
-          <p class="text-center mt-3 mb-0">
-            Нет аккаунта?
-            <router-link to="/register">Зарегистрироваться</router-link>
+          <p class="text-center mt-3 mb-0 text-muted small">
+            Доступ только по приглашению
           </p>
         </div>
       </div>

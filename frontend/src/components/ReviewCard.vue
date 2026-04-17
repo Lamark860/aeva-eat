@@ -32,13 +32,30 @@
           <button class="btn btn-outline-danger btn-sm" @click="$emit('delete', review.id)">🗑</button>
         </div>
       </div>
+
+      <!-- Video message -->
+      <div v-if="review.video_url" class="mt-2 d-flex justify-content-start">
+        <div class="video-message" @click="toggleVideo">
+          <video
+            ref="videoEl"
+            :src="review.video_url"
+            class="video-message-player"
+            playsinline
+            loop
+            muted
+            preload="metadata"
+          ></video>
+          <div v-if="!playing" class="video-play-overlay">▶</div>
+        </div>
+      </div>
+
       <p v-if="review.comment" class="mb-0 mt-2">{{ review.comment }}</p>
     </div>
   </div>
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { ref, computed } from 'vue'
 
 const props = defineProps({
   review: { type: Object, required: true },
@@ -47,10 +64,25 @@ const props = defineProps({
 
 defineEmits(['edit', 'delete'])
 
+const videoEl = ref(null)
+const playing = ref(false)
+
 const overallRating = computed(() => {
   const r = props.review
   return ((r.food_rating + r.service_rating + r.vibe_rating) / 3).toFixed(1)
 })
+
+function toggleVideo() {
+  if (!videoEl.value) return
+  if (videoEl.value.paused) {
+    videoEl.value.muted = false
+    videoEl.value.play()
+    playing.value = true
+  } else {
+    videoEl.value.pause()
+    playing.value = false
+  }
+}
 
 function formatDate(dateStr) {
   if (!dateStr) return ''
@@ -80,5 +112,34 @@ function formatDate(dateStr) {
   color: #fff;
   font-size: 0.6rem;
   font-weight: 700;
+}
+.video-message {
+  width: 160px;
+  height: 160px;
+  border-radius: 50%;
+  overflow: hidden;
+  position: relative;
+  background: #000;
+  cursor: pointer;
+  border: 3px solid #dee2e6;
+  transition: border-color 0.2s;
+}
+.video-message:hover {
+  border-color: var(--bs-primary);
+}
+.video-message-player {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.video-play-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0,0,0,0.3);
+  color: #fff;
+  font-size: 2rem;
 }
 </style>

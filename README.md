@@ -36,12 +36,22 @@ docker compose up --build -d
 - `GET /api/health` — healthcheck
 
 ### Auth
-- `POST /api/auth/register` — регистрация `{username, password}`
+- `POST /api/auth/register` — регистрация `{username, password, invite_code}`
 - `POST /api/auth/login` — логин `{username, password}`
 - `GET /api/auth/me` — профиль (JWT)
+- `PUT /api/auth/password` — смена пароля `{old_password, new_password}` (auth)
+- `POST /api/auth/avatar` — загрузка аватарки (auth, multipart/form-data, поле `avatar`)
+
+### Invites
+- `GET /api/invites/validate/:code` — проверка инвайт-кода (публичный)
+- `GET /api/invites` — мои инвайты (auth)
+- `POST /api/invites` — создать инвайт (auth)
+- `DELETE /api/invites/:id` — удалить инвайт (auth)
+- `GET /api/invites/all` — все инвайты (superuser)
+- `GET /api/admin/users` — все пользователи (superuser)
 
 ### Places
-- `GET /api/places` — список (фильтры: city, cuisine_type_id, category_id, min_rating, is_gem, search, sort: `rating`|`rating_asc`|`name`)
+- `GET /api/places` — список `{places: [...], total: N}` (фильтры: city, cuisine_type_id, category_id, min_rating, is_gem, search, sort: `rating`|`rating_asc`|`name`; пагинация: `limit` (default 20, 0=все), `page`)
 - `GET /api/places/cities` — список городов (уникальные)
 - `GET /api/places/:id` — деталь
 - `POST /api/places` — создать (auth)
@@ -55,6 +65,7 @@ docker compose up --build -d
 - `PUT /api/places/:id/reviews/:rid` — обновить (auth, author)
 - `DELETE /api/places/:id/reviews/:rid` — удалить (auth, author)
 - `POST /api/places/:id/reviews/:rid/image` — загрузить фото к отзыву (auth, author)
+- `POST /api/places/:id/reviews/:rid/video` — загрузить видео к отзыву (auth, author, mp4/webm, до 20MB)
 - `GET /api/users/:userId/reviews` — отзывы пользователя
 
 ### Геосаджест
@@ -90,7 +101,7 @@ aeva-eat/
 │   │   ├── model/                   — структуры данных
 │   │   ├── repository/              — SQL запросы
 │   │   └── service/                 — бизнес-логика
-│   ├── migrations/                  — SQL миграции (001–008)
+│   ├── migrations/                  — SQL миграции (001–010)
 │   └── Dockerfile
 ├── frontend/
 │   ├── src/

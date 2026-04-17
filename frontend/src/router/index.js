@@ -4,53 +4,80 @@ const routes = [
   {
     path: '/',
     name: 'Home',
-    component: () => import('../views/Home.vue')
+    component: () => import('../views/Home.vue'),
+    meta: { requiresAuth: true }
   },
   {
     path: '/login',
     name: 'Login',
-    component: () => import('../views/Login.vue')
+    component: () => import('../views/Login.vue'),
+    meta: { guest: true }
   },
   {
-    path: '/register',
-    name: 'Register',
-    component: () => import('../views/Register.vue')
+    path: '/invite/:code',
+    name: 'InviteRegister',
+    component: () => import('../views/InviteRegister.vue'),
+    meta: { guest: true }
   },
   {
     path: '/places',
     name: 'Places',
-    component: () => import('../views/Places.vue')
+    component: () => import('../views/Places.vue'),
+    meta: { requiresAuth: true }
   },
   {
     path: '/places/new',
     name: 'PlaceCreate',
-    component: () => import('../views/PlaceForm.vue')
+    component: () => import('../views/PlaceForm.vue'),
+    meta: { requiresAuth: true }
   },
   {
     path: '/places/:id',
     name: 'PlaceDetail',
-    component: () => import('../views/PlaceDetail.vue')
+    component: () => import('../views/PlaceDetail.vue'),
+    meta: { requiresAuth: true }
   },
   {
     path: '/places/:id/edit',
     name: 'PlaceEdit',
-    component: () => import('../views/PlaceForm.vue')
+    component: () => import('../views/PlaceForm.vue'),
+    meta: { requiresAuth: true }
   },
   {
     path: '/profile',
     name: 'Profile',
-    component: () => import('../views/Profile.vue')
+    component: () => import('../views/Profile.vue'),
+    meta: { requiresAuth: true }
   },
   {
     path: '/map',
     name: 'Map',
-    component: () => import('../views/MapPage.vue')
+    component: () => import('../views/MapPage.vue'),
+    meta: { requiresAuth: true }
+  },
+  {
+    path: '/invites',
+    name: 'Invites',
+    component: () => import('../views/Invites.vue'),
+    meta: { requiresAuth: true }
   }
 ]
 
 const router = createRouter({
   history: createWebHistory(),
   routes
+})
+
+router.beforeEach((to, from, next) => {
+  const token = localStorage.getItem('token')
+
+  if (to.meta.requiresAuth && !token) {
+    next({ name: 'Login' })
+  } else if (to.meta.guest && token) {
+    next({ name: 'Home' })
+  } else {
+    next()
+  }
 })
 
 export default router

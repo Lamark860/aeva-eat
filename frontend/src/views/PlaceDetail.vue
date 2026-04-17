@@ -27,15 +27,17 @@
         <router-link :to="`/places/${place.id}/edit`" class="btn btn-outline-primary btn-sm">Ред.</router-link>
         <button class="btn btn-outline-danger btn-sm" @click="handleDelete">Удалить</button>
       </div>
-      <button
-        v-if="auth.isAuthenticated"
-        class="btn btn-sm ms-auto"
-        :class="wishlist.isWishlisted(place.id) ? 'btn-danger' : 'btn-outline-danger'"
-        @click="wishlist.toggle(place.id)"
-        :title="wishlist.isWishlisted(place.id) ? 'Убрать из планов' : 'Хочу сходить'"
-      >
-        {{ wishlist.isWishlisted(place.id) ? '❤️ В планах' : '🤍 Хочу сходить' }}
-      </button>
+      <div v-else class="d-flex">
+        <button
+          v-if="auth.isAuthenticated"
+          class="btn btn-sm"
+          :class="wishlist.isWishlisted(place.id) ? 'btn-danger' : 'btn-outline-danger'"
+          @click="wishlist.toggle(place.id)"
+          :title="wishlist.isWishlisted(place.id) ? 'Убрать из планов' : 'Хочу сходить'"
+        >
+          {{ wishlist.isWishlisted(place.id) ? '❤️ В планах' : '🤍 Хочу сходить' }}
+        </button>
+      </div>
     </div>
 
     <!-- Ratings summary -->
@@ -82,6 +84,7 @@
 
     <ReviewForm
       v-if="auth.isAuthenticated && !editingReview"
+      :key="reviewFormKey"
       :place-id="place.id"
       @submitted="handleCreateReview"
     />
@@ -140,6 +143,7 @@ const wishlist = useWishlistStore()
 const toast = useToast()
 
 const editingReview = ref(null)
+const reviewFormKey = ref(0)
 
 const place = computed(() => placesStore.currentPlace)
 const isOwner = computed(() => auth.user && place.value && place.value.created_by === auth.user.id)
@@ -161,25 +165,44 @@ function canEditReview(rv) {
 
 async function handleCreateReview(data) {
   const photoFile = data._photoFile
+  const videoFile = data._videoFile
   delete data._photoFile
-  const created = await reviewsStore.createReview(place.value.id, data)
-  if (photoFile && created?.id) {
-    await reviewsStore.uploadReviewImage(place.value.id, created.id, photoFile)
+  delete data._videoFile
+  try {
+    const created = await reviewsStore.createReview(place.value.id, data)
+    if (photoFile && created?.id) {
+      await reviewsStore.uploadReviewImage(place.value.id, created.id, photoFile)
+    }
+    if (videoFile && created?.id) {
+      await reviewsStore.uploadReviewVideo(place.value.id, created.id, videoFile)
+    }
+    toast.success('Отзыв добавлен!')
+  } catch (e) {
+    toast.error(e.response?.data?.error || 'Ошибка при создании отзыва')
   }
-  toast.success('Отзыв добавлен!')
+  reviewFormKey.value++
   await placesStore.fetchPlace(route.params.id)
   await reviewsStore.fetchByPlace(route.params.id)
 }
 
 async function handleUpdateReview(data) {
   const photoFile = data._photoFile
+  const videoFile = data._videoFile
   delete data._photoFile
-  await reviewsStore.updateReview(place.value.id, editingReview.value.id, data)
-  if (photoFile) {
-    await reviewsStore.uploadReviewImage(place.value.id, editingReview.value.id, photoFile)
+  delete data._videoFile
+  try {
+    await reviewsStore.updateReview(place.value.id, editingReview.value.id, data)
+    if (photoFile) {
+      await reviewsStore.uploadReviewImage(place.value.id, editingReview.value.id, photoFile)
+    }
+    if (videoFile) {
+      await reviewsStore.uploadReviewVideo(place.value.id, editingReview.value.id, videoFile)
+    }
+    editingReview.value = null
+    toast.success('Отзыв обновлён')
+  } catch (e) {
+    toast.error(e.response?.data?.error || 'Ошибка при обновлении отзыва')
   }
-  editingReview.value = null
-  toast.success('Отзыв обновлён')
   await placesStore.fetchPlace(route.params.id)
   await reviewsStore.fetchByPlace(route.params.id)
 }

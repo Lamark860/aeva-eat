@@ -13,17 +13,21 @@ import (
 var (
 	ErrInvalidCredentials = errors.New("invalid username or password")
 	ErrUserExists         = errors.New("user with this username already exists")
+	ErrInvalidInvite      = errors.New("invalid or expired invite code")
+	ErrInviteUsed         = errors.New("invite code has already been used")
 )
 
 type AuthService struct {
-	userRepo  *repository.UserRepo
-	jwtSecret []byte
+	userRepo   *repository.UserRepo
+	inviteRepo *repository.InviteRepo
+	jwtSecret  []byte
 }
 
-func NewAuthService(userRepo *repository.UserRepo, jwtSecret string) *AuthService {
+func NewAuthService(userRepo *repository.UserRepo, inviteRepo *repository.InviteRepo, jwtSecret string) *AuthService {
 	return &AuthService{
-		userRepo:  userRepo,
-		jwtSecret: []byte(jwtSecret),
+		userRepo:   userRepo,
+		inviteRepo: inviteRepo,
+		jwtSecret:  []byte(jwtSecret),
 	}
 }
 
@@ -31,7 +35,19 @@ type TokenPair struct {
 	AccessToken string `json:"access_token"`
 }
 
-func (s *AuthService) Register(username, displayName, password string) (*model.User, *TokenPair, error) {
+func (s *AuthService) Register(username, displayName, password, inviteCode string) (*model.User, *TokenPair, error) {
+	// Validate invite code
+	invite, err := s.inviteRepo.GetByCode(inviteCode)
+	if err != nil {
+		return nil, nil, ErrInvalidInvite
+	}
+	if invite.UsedBy != nil {
+		return nil, nil, ErrInviteUsed
+	}
+	if invite.ExpiresAt != nil && invite.ExpiresAt.Before(time.Now()) {
+		return nil, nil, ErrInvalidInvite
+	}
+
 	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
 		return nil, nil, err
@@ -41,6 +57,9 @@ func (s *AuthService) Register(username, displayName, password string) (*model.U
 	if err != nil {
 		return nil, nil, ErrUserExists
 	}
+
+	// Mark invite as used
+	_ = s.inviteRepo.MarkUsed(inviteCode, user.ID)
 
 	token, err := s.generateToken(user.ID)
 	if err != nil {
@@ -70,6 +89,28 @@ func (s *AuthService) Login(username, password string) (*model.User, *TokenPair,
 
 func (s *AuthService) GetUserByID(id int) (*model.User, error) {
 	return s.userRepo.GetByID(id)
+}
+
+func (s *AuthService) ChangePassword(userID int, oldPassword, newPassword string) error {
+	user, err := s.userRepo.GetByIDWithPassword(userID)
+	if err != nil {
+		return errors.New("user not found")
+	}
+
+	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(oldPassword)); err != nil {
+		return ErrInvalidCredentials
+	}
+
+	hash, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
+	if err != nil {
+		return err
+	}
+
+	return s.userRepo.UpdatePassword(userID, string(hash))
+}
+
+func (s *AuthService) UpdateAvatarURL(userID int, avatarURL string) error {
+	return s.userRepo.UpdateAvatarURL(userID, avatarURL)
 }
 
 func (s *AuthService) generateToken(userID int) (string, error) {

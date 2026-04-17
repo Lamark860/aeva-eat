@@ -95,16 +95,19 @@ make lint     # только линтеры
 # Health
 curl http://localhost:8091/api/health
 
-# Список заведений
-curl "http://localhost:8091/api/places"
+# Список заведений (с пагинацией)
+curl "http://localhost:8091/api/places?limit=20&page=1"
+
+# Все заведения (без пагинации, для карты)
+curl "http://localhost:8091/api/places?limit=0"
 
 # Фильтрация: жемчужины в Казани, сортировка по рейтингу
 curl "http://localhost:8091/api/places?city=Казань&is_gem=true&sort=rating"
 
-# Регистрация
+# Регистрация (нужен invite_code — получите через /api/invites)
 curl -X POST http://localhost:8091/api/auth/register \
   -H "Content-Type: application/json" \
-  -d '{"username":"test","password":"test123"}'
+  -d '{"username":"test","password":"test123","invite_code":"ВСТАВЬТЕ_КОД"}'
 
 # Логин (получить токен)
 curl -X POST http://localhost:8091/api/auth/login \
@@ -114,6 +117,17 @@ curl -X POST http://localhost:8091/api/auth/login \
 # Профиль (с токеном)
 curl http://localhost:8091/api/auth/me \
   -H "Authorization: Bearer <TOKEN>"
+
+# Смена пароля
+curl -X PUT http://localhost:8091/api/auth/password \
+  -H "Authorization: Bearer <TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{"old_password":"old123","new_password":"new123"}'
+
+# Загрузка аватара
+curl -X POST http://localhost:8091/api/auth/avatar \
+  -H "Authorization: Bearer <TOKEN>" \
+  -F "avatar=@photo.jpg"
 
 # Отзывы пользователя
 curl "http://localhost:8091/api/users/1/reviews"
