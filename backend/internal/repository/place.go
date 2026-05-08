@@ -41,10 +41,14 @@ type PlaceListResult struct {
 }
 
 func (r *PlaceRepo) List(f PlaceFilter) (*PlaceListResult, error) {
+	// place_categories is M2M, so we used to JOIN it and rely on DISTINCT to dedupe.
+	// That broke sort by rating: `ORDER BY (rs.avg_food IS NULL)` violates the
+	// Postgres rule that ORDER BY expressions must appear in SELECT under DISTINCT.
+	// Switching the category filter to EXISTS removes the need for both the JOIN
+	// and DISTINCT; ct and rs are 1:1 with p so no duplicates remain.
 	baseFrom := `
 		FROM places p
 		LEFT JOIN cuisine_types ct ON ct.id = p.cuisine_type_id
-		LEFT JOIN place_categories pc ON pc.place_id = p.id
 		LEFT JOIN (
 			SELECT place_id,
 				AVG(food_rating)::numeric(3,1) AS avg_food,
@@ -80,7 +84,9 @@ func (r *PlaceRepo) List(f PlaceFilter) (*PlaceListResult, error) {
 			args = append(args, id)
 			argIdx++
 		}
-		conditions = append(conditions, fmt.Sprintf("pc.category_id IN (%s)", strings.Join(placeholders, ",")))
+		conditions = append(conditions, fmt.Sprintf(
+			"EXISTS (SELECT 1 FROM place_categories pc WHERE pc.place_id = p.id AND pc.category_id IN (%s))",
+			strings.Join(placeholders, ",")))
 	}
 	if f.MinRating > 0 {
 		conditions = append(conditions, fmt.Sprintf(
@@ -105,14 +111,14 @@ func (r *PlaceRepo) List(f PlaceFilter) (*PlaceListResult, error) {
 
 	// Count total
 	var total int
-	countQuery := "SELECT COUNT(DISTINCT p.id) " + baseFrom + whereClause
+	countQuery := "SELECT COUNT(*) " + baseFrom + whereClause
 	if err := r.db.QueryRow(countQuery, args...).Scan(&total); err != nil {
 		return nil, fmt.Errorf("count places: %w", err)
 	}
 
 	// Main query
 	query := `
-		SELECT DISTINCT p.id, p.name, p.address, p.city, p.lat, p.lng,
+		SELECT p.id, p.name, p.address, p.city, p.lat, p.lng,
 			p.cuisine_type_id, ct.name AS cuisine_type, p.website,
 			p.created_by, p.image_url, p.created_at, p.updated_at,
 			COALESCE(rs.avg_food, 0), COALESCE(rs.avg_service, 0), COALESCE(rs.avg_vibe, 0),
