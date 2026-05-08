@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -36,8 +37,7 @@ type createPlaceRequest struct {
 	CategoryIDs   []int    `json:"category_ids,omitempty"`
 }
 
-func (h *PlaceHandler) List(w http.ResponseWriter, r *http.Request) {
-	q := r.URL.Query()
+func parsePlaceListFilter(q url.Values) repository.PlaceFilter {
 	filter := repository.PlaceFilter{
 		City:   q.Get("city"),
 		Search: q.Get("search"),
@@ -87,6 +87,11 @@ func (h *PlaceHandler) List(w http.ResponseWriter, r *http.Request) {
 	}
 	filter.Limit = limit
 	filter.Offset = (page - 1) * limit
+	return filter
+}
+
+func (h *PlaceHandler) List(w http.ResponseWriter, r *http.Request) {
+	filter := parsePlaceListFilter(r.URL.Query())
 
 	result, err := h.placeRepo.List(filter)
 	if err != nil {

@@ -16,6 +16,13 @@ func NewPlaceRepo(db *sql.DB) *PlaceRepo {
 	return &PlaceRepo{db: db}
 }
 
+// escapeLike escapes characters that have special meaning inside an SQL LIKE pattern
+// when the query uses ESCAPE '\'. Order matters: backslash first.
+func escapeLike(s string) string {
+	r := strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`)
+	return r.Replace(s)
+}
+
 type PlaceFilter struct {
 	City           string
 	CuisineTypeIDs []int
@@ -84,9 +91,10 @@ func (r *PlaceRepo) List(f PlaceFilter) (*PlaceListResult, error) {
 	if f.IsGem != nil && *f.IsGem {
 		conditions = append(conditions, `EXISTS (SELECT 1 FROM reviews rv WHERE rv.place_id = p.id AND rv.is_gem = true)`)
 	}
-	if f.Search != "" {
-		conditions = append(conditions, fmt.Sprintf("LOWER(p.name) LIKE LOWER($%d)", argIdx))
-		args = append(args, "%"+f.Search+"%")
+	if s := strings.TrimSpace(f.Search); s != "" {
+		// Escape LIKE wildcards so user-typed % and _ match literally, not as wildcards.
+		conditions = append(conditions, fmt.Sprintf("LOWER(p.name) LIKE LOWER($%d) ESCAPE '\\'", argIdx))
+		args = append(args, "%"+escapeLike(s)+"%")
 		argIdx++
 	}
 
@@ -112,20 +120,24 @@ func (r *PlaceRepo) List(f PlaceFilter) (*PlaceListResult, error) {
 			EXISTS(SELECT 1 FROM reviews rv WHERE rv.place_id = p.id AND rv.is_gem = true) AS is_gem_place
 	` + baseFrom + whereClause
 
+	// All ORDER BY clauses end with `p.id DESC` as a stable tiebreaker — without it,
+	// rows with equal sort keys return in undefined order and pagination becomes unstable
+	// (the same place can appear on two pages, or vanish between pages).
 	switch f.Sort {
 	case "rating":
-		query += " ORDER BY (COALESCE(rs.avg_food,0) + COALESCE(rs.avg_service,0) + COALESCE(rs.avg_vibe,0)) DESC"
+		query += ` ORDER BY (rs.avg_food IS NULL) ASC, (COALESCE(rs.avg_food,0) + COALESCE(rs.avg_service,0) + COALESCE(rs.avg_vibe,0)) DESC, p.id DESC`
 	case "rating_asc":
-		query += " ORDER BY (COALESCE(rs.avg_food,0) + COALESCE(rs.avg_service,0) + COALESCE(rs.avg_vibe,0)) ASC"
+		query += ` ORDER BY (rs.avg_food IS NULL) ASC, (COALESCE(rs.avg_food,0) + COALESCE(rs.avg_service,0) + COALESCE(rs.avg_vibe,0)) ASC, p.id DESC`
 	case "name":
-		query += " ORDER BY p.name"
+		query += " ORDER BY p.name, p.id DESC"
 	default:
-		query += " ORDER BY p.created_at DESC"
+		query += " ORDER BY p.created_at DESC, p.id DESC"
 	}
 
 	if f.Limit > 0 {
 		query += fmt.Sprintf(" LIMIT $%d OFFSET $%d", argIdx, argIdx+1)
 		args = append(args, f.Limit, f.Offset)
+		argIdx += 2
 	}
 
 	rows, err := r.db.Query(query, args...)
