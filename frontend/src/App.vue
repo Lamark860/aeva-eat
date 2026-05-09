@@ -5,7 +5,8 @@
         <router-link class="navbar-brand d-flex align-items-center gap-2" to="/">
           <span class="brand-icon">🍽</span> AEVA Eat
         </router-link>
-        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navMain">
+        <!-- Hamburger toggler is suppressed on mobile; the bottom tab bar provides nav -->
+        <button class="navbar-toggler d-none" type="button" data-bs-toggle="collapse" data-bs-target="#navMain">
           <span class="navbar-toggler-icon"></span>
         </button>
         <div class="collapse navbar-collapse" id="navMain">
@@ -26,10 +27,19 @@
             </template>
           </div>
         </div>
+        <!-- Mobile-only avatar shortcut to profile (since collapsed nav is hidden) -->
+        <router-link
+          v-if="auth.isAuthenticated"
+          class="d-md-none ms-auto avatar-link"
+          to="/profile"
+          aria-label="Профиль"
+        >
+          <span class="avatar-sm">{{ auth.user?.username?.charAt(0)?.toUpperCase() }}</span>
+        </router-link>
       </div>
     </nav>
 
-    <main class="container-fluid container-lg py-4">
+    <main class="container-fluid container-lg py-4 main-content">
       <router-view v-slot="{ Component }">
         <transition name="page" mode="out-in">
           <component :is="Component" />
@@ -39,7 +49,9 @@
 
     <ToastContainer />
 
-    <footer class="app-footer text-center text-muted py-3 mt-4">
+    <BottomTabBar />
+
+    <footer class="app-footer text-center text-muted py-3 mt-4 d-none d-md-block">
       <small>
         Картографические данные предоставлены
         <a href="https://yandex.ru/legal/maps_termsofuse/" target="_blank" rel="noopener">Яндекс Картами</a>
@@ -53,6 +65,7 @@ import { useAuthStore } from './stores/auth'
 import { useWishlistStore } from './stores/wishlist'
 import { useRouter } from 'vue-router'
 import ToastContainer from './components/ToastContainer.vue'
+import BottomTabBar from './components/BottomTabBar.vue'
 
 const auth = useAuthStore()
 const wishlist = useWishlistStore()
@@ -85,5 +98,21 @@ function logout() {
 
 .brand-icon {
   font-size: 1.4rem;
+}
+
+.avatar-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  text-decoration: none;
+}
+
+.avatar-link .avatar-sm {
+  width: 36px;
+  height: 36px;
+  font-size: 1rem;
 }
 </style>

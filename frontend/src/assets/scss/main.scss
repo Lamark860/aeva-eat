@@ -108,6 +108,15 @@ body {
   }
 }
 
+// Reserve space at the bottom of the page so the fixed BottomTabBar
+// (height 56px + safe-area inset) doesn't cover the last bit of content.
+// Desktop has no bottom bar — no padding added there.
+@include media-breakpoint-down(md) {
+  .main-content {
+    padding-bottom: calc(56px + var(--aeva-safe-bottom, 0px) + 16px);
+  }
+}
+
 // Navbar
 .navbar {
   backdrop-filter: blur(12px);
