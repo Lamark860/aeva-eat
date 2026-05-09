@@ -7,8 +7,8 @@
       </router-link>
     </div>
 
-    <!-- Filters -->
-    <div class="card mb-4">
+    <!-- Desktop filter row (md+) -->
+    <div class="card mb-4 d-none d-md-block">
       <div class="card-body">
         <div class="row g-2">
           <div class="col-md-3">
@@ -29,7 +29,7 @@
           <div class="col-md-2">
             <MultiSelect
               :modelValue="placesStore.filters.cuisine_type_ids"
-              @update:modelValue="v => { placesStore.filters.cuisine_type_ids = v; fetchFiltered() }"
+              @update:model-value="v => { placesStore.filters.cuisine_type_ids = v; fetchFiltered() }"
               :options="catalogs.cuisineTypes"
               placeholder="Кухни"
             />
@@ -37,7 +37,7 @@
           <div class="col-md-2">
             <MultiSelect
               :modelValue="placesStore.filters.category_ids"
-              @update:modelValue="v => { placesStore.filters.category_ids = v; fetchFiltered() }"
+              @update:model-value="v => { placesStore.filters.category_ids = v; fetchFiltered() }"
               :options="catalogs.categories"
               placeholder="Категории"
             />
@@ -68,6 +68,101 @@
             <span class="badge bg-secondary">Мин. рейтинг: {{ placesStore.filters.min_rating }}+</span>
             <button class="btn btn-sm btn-link p-0 ms-1" @click="placesStore.filters.min_rating = ''; fetchFiltered()">✕</button>
           </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Mobile filter bar (sticky search + filter button) -->
+    <div class="d-md-none mb-3 mobile-filter-bar">
+      <div class="d-flex gap-2">
+        <input
+          v-model="placesStore.filters.search"
+          type="text"
+          class="form-control flex-grow-1"
+          placeholder="🔍 Поиск по названию"
+          @input="debouncedFetch"
+        />
+        <button
+          class="btn btn-outline-secondary position-relative px-3"
+          type="button"
+          data-bs-toggle="offcanvas"
+          data-bs-target="#placesFilterDrawer"
+          aria-label="Открыть фильтры"
+        >
+          🎛
+          <span
+            v-if="activeFilterCount > 0"
+            class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-primary"
+            style="font-size: 0.65rem"
+          >{{ activeFilterCount }}</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Mobile filter drawer (offcanvas-bottom) -->
+    <div
+      class="offcanvas offcanvas-bottom d-md-none"
+      tabindex="-1"
+      id="placesFilterDrawer"
+      aria-labelledby="placesFilterDrawerLabel"
+      style="height: auto; max-height: 85vh"
+    >
+      <div class="offcanvas-header border-bottom">
+        <h5 class="offcanvas-title" id="placesFilterDrawerLabel">Фильтры</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Закрыть"></button>
+      </div>
+      <div class="offcanvas-body">
+        <div class="mb-3">
+          <label class="form-label small text-muted mb-1">Город</label>
+          <select v-model="placesStore.filters.city" class="form-select">
+            <option value="">Все города</option>
+            <option v-for="city in cities" :key="city" :value="city">{{ city }}</option>
+          </select>
+        </div>
+        <div class="mb-3">
+          <label class="form-label small text-muted mb-1">Кухни</label>
+          <MultiSelect
+            :modelValue="placesStore.filters.cuisine_type_ids"
+            @update:model-value="v => placesStore.filters.cuisine_type_ids = v"
+            :options="catalogs.cuisineTypes"
+            placeholder="Любые"
+          />
+        </div>
+        <div class="mb-3">
+          <label class="form-label small text-muted mb-1">Категории</label>
+          <MultiSelect
+            :modelValue="placesStore.filters.category_ids"
+            @update:model-value="v => placesStore.filters.category_ids = v"
+            :options="catalogs.categories"
+            placeholder="Любые"
+          />
+        </div>
+        <div class="mb-3">
+          <label class="form-label small text-muted mb-1">Сортировка</label>
+          <select v-model="placesStore.filters.sort" class="form-select">
+            <option value="">Сначала новые</option>
+            <option value="rating">По рейтингу ↓</option>
+            <option value="rating_asc">По рейтингу ↑</option>
+            <option value="name">По названию</option>
+          </select>
+        </div>
+        <div class="form-check form-switch mb-3">
+          <input
+            v-model="placesStore.filters.is_gem"
+            class="form-check-input"
+            type="checkbox"
+            id="gemFilterMobile"
+            role="switch"
+          />
+          <label class="form-check-label" for="gemFilterMobile">💎 Только жемчужины</label>
+        </div>
+        <div v-if="placesStore.filters.min_rating" class="mb-3">
+          <span class="badge bg-secondary">Мин. рейтинг: {{ placesStore.filters.min_rating }}+</span>
+          <button class="btn btn-sm btn-link p-0 ms-1" @click="placesStore.filters.min_rating = ''">✕</button>
+        </div>
+        <div class="d-grid gap-2 mt-4">
+          <button class="btn btn-primary" data-bs-dismiss="offcanvas" @click="fetchFiltered">Применить</button>
+          <button class="btn btn-link" @click="resetFilters">Сбросить</button>
         </div>
       </div>
     </div>
@@ -125,6 +220,28 @@ const catalogs = useCatalogsStore()
 const auth = useAuthStore()
 
 const cities = ref([])
+
+const activeFilterCount = computed(() => {
+  const f = placesStore.filters
+  let n = 0
+  if (f.city) n++
+  if (f.cuisine_type_ids?.length) n++
+  if (f.category_ids?.length) n++
+  if (f.sort) n++
+  if (f.is_gem) n++
+  if (f.min_rating) n++
+  return n
+})
+
+function resetFilters() {
+  placesStore.filters.city = ''
+  placesStore.filters.cuisine_type_ids = []
+  placesStore.filters.category_ids = []
+  placesStore.filters.sort = ''
+  placesStore.filters.is_gem = false
+  placesStore.filters.min_rating = ''
+  fetchFiltered()
+}
 
 // Sync filters from URL on load
 function loadFiltersFromURL() {
