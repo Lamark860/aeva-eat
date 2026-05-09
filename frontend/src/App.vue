@@ -93,6 +93,20 @@ function logout() {
   /* Scrapbook screens render edge-to-edge — no Bootstrap container padding. */
   padding: 0;
   margin: 0;
+
+  /* DESIGN-DECISIONS G1: на десктопе колонка-страница центрируется
+     (max-width у внутренних .doska/.find/.detail/etc через padding-inline),
+     а вокруг неё «стол» — тон темнее бумаги. На мобилке max-width
+     заполняет экран полностью, поэтому видно только на ≥768px. */
+  background: var(--sb-paper-edge);
+  min-height: 100vh;
+}
+.is-scrapbook > main.sb-main > * {
+  /* Сама страница остаётся paper-цвета — окружение читается как «стол».
+     На мобилке max-width не сработает (контент уже уже viewport),
+     на десктопе колонка центрируется. */
+  max-width: 640px;
+  margin-inline: auto;
 }
 
 .avatar-sm {

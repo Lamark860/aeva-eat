@@ -113,22 +113,20 @@
         </div>
       </section>
 
-      <!-- По городам -->
+      <!-- По городам — вертикальный список (DESIGN-DECISIONS F1):
+           имя серифой слева, count-штамп справа -->
       <section v-if="cityShelf.length" class="shelf">
         <div class="shelf-head">
           <h3>По городам</h3>
         </div>
-        <div class="shelf-stamps">
-          <button
-            v-for="c in cityShelf"
-            :key="c.name"
-            class="city-stamp"
-            @click="filterByCity(c.name)"
-          >
-            <span class="name">{{ c.name }}</span>
-            <span class="count">{{ c.count }}</span>
-          </button>
-        </div>
+        <ul class="city-list">
+          <li v-for="c in cityShelf" :key="c.name">
+            <button class="city-row" @click="filterByCity(c.name)">
+              <span class="city-name">{{ c.name }}</span>
+              <span class="city-count">{{ c.count }}</span>
+            </button>
+          </li>
+        </ul>
       </section>
 
       <!-- По кухням -->
@@ -668,31 +666,53 @@ onMounted(async () => {
   flex-wrap: wrap;
   gap: 8px 6px;
 }
-.city-stamp {
-  display: inline-flex;
+
+/* Города — вертикальный список (F1) */
+.city-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.city-list li {
+  border-bottom: 1px dashed rgba(40, 30, 20, 0.14);
+}
+.city-list li:last-child { border-bottom: none; }
+.city-row {
+  display: flex;
   align-items: baseline;
-  gap: 6px;
+  width: 100%;
   background: transparent;
-  border: 1.4px solid var(--sb-ink);
-  border-radius: 2px;
-  padding: 4px 9px 3px;
+  border: none;
+  padding: 10px 4px;
+  font-family: var(--sb-serif);
+  cursor: pointer;
+  text-align: left;
+
+  &:hover .city-name { color: var(--sb-terracotta); }
+}
+.city-name {
+  flex: 1;
+  font-style: italic;
+  font-weight: 500;
+  font-size: 18px;
+  color: var(--sb-ink);
+  line-height: 1.1;
+}
+.city-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 28px;
   font-family: var(--sb-serif);
   font-weight: 600;
   font-size: 11px;
   letter-spacing: 0.16em;
   text-transform: uppercase;
   color: var(--sb-ink);
-  cursor: pointer;
-  box-shadow: inset 0 0 0 0.5px rgba(40,30,20,0.18);
-  &:hover { background: oklch(0.92 0.05 85); }
-  .count {
-    font-family: var(--sb-hand);
-    font-size: 16px;
-    font-weight: 500;
-    letter-spacing: 0;
-    color: var(--sb-ink-mute);
-    text-transform: none;
-  }
+  border: 1.4px solid var(--sb-ink);
+  border-radius: 2px;
+  padding: 4px 9px 3px;
+  box-shadow: inset 0 0 0 0.5px rgba(40, 30, 20, 0.18);
 }
 
 :deep(.sb-stamp.clickable) { cursor: pointer; }

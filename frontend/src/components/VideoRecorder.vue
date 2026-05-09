@@ -104,9 +104,12 @@ async function startCamera() {
   error.value = ''
   // getUserMedia is gated behind a secure context: localhost or HTTPS.
   // When opened from a LAN hostname (e.g. http://*.local:8091) the browser
-  // disables it silently — surface a clear hint instead.
+  // disables it silently — surface a soft hint per DESIGN-DECISIONS R2.
+  // Technical detail goes to console.error for the dev to investigate.
   if (!window.isSecureContext) {
-    error.value = 'камера требует https — открой через localhost или https-туннель'
+    error.value = 'кружочки пока только с компьютера'
+    // eslint-disable-next-line no-console
+    console.error('[VideoRecorder] insecure context — getUserMedia blocked. Open via localhost or HTTPS.')
     starting.value = false
     return
   }

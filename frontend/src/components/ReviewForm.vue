@@ -295,7 +295,16 @@ textarea.paper-control {
     border-style: solid;
     border-color: var(--sb-terracotta);
     color: var(--sb-terracotta);
+    // DESIGN-DECISIONS R3: «прихлопнул печатью» — короткий thump на
+    // включении. Каждый клик в `on` перезапускает анимацию.
+    animation: sb-gem-stamp 220ms ease-out;
   }
+}
+@keyframes sb-gem-stamp {
+  0%   { transform: scale(1); }
+  35%  { transform: scale(0.85); }
+  70%  { transform: scale(1.05); }
+  100% { transform: scale(1); }
 }
 
 /* Photo zone — polaroid placeholder */

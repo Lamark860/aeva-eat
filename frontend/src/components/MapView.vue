@@ -35,9 +35,11 @@ const C = {
 }
 
 // Traffic-light coloring for rated markers — green good / ochre mid / terra bad.
-// Unrated places keep terra so a brand-new place still reads as a pin.
+// No rating yet (wishlist or freshly added) → ochre, NOT terra: terra means
+// "tried it, was bad" in the light system. Painting unrated places terra would
+// make wishlist look like a junkyard. Per DESIGN-DECISIONS.md M1.
 function ratingTone(rating) {
-  if (rating == null) return { light: C.terra, dark: C.terraDark, shade: C.terraDark }
+  if (rating == null) return { light: C.ochre, dark: C.ochreDark, shade: C.ochreDark }
   const v = Number(rating)
   if (v >= 8.0) return { light: C.moss,  dark: C.mossDark,  shade: C.mossDark  }
   if (v >= 5.0) return { light: C.ochre, dark: C.ochreDark, shade: C.ochreDark }
@@ -149,12 +151,39 @@ function buildBalloonContent(place, avgRating) {
     ? `<span style="display:inline-block;font-family:Lora,Georgia,serif;font-weight:600;font-size:9.5px;letter-spacing:.18em;text-transform:uppercase;color:#c66b3e;border:1.4px solid #c66b3e;padding:3px 7px 2px;border-radius:2px;background:rgba(232,201,122,.5);margin-left:8px">жемчужина</span>`
     : ''
 
+  // Author stack — DESIGN-DECISIONS M2. 22px circles, max 4, no «с нами:» label,
+  // only a colon as visual hint that what follows is people. Avatars when set,
+  // colored initials otherwise.
+  const authorPalette = {
+    terra: { bg: '#dcb19c', ink: '#5a2b1c' },
+    ochre: { bg: '#e8d29a', ink: '#5d4a14' },
+    moss:  { bg: '#bdcfb1', ink: '#33472a' },
+    plum:  { bg: '#cdb1be', ink: '#4a2438' },
+  }
+  const palette = ['terra', 'ochre', 'moss', 'plum']
+  const reviewers = (place.reviewers || []).slice(0, 4)
+  const peopleHtml = reviewers.length
+    ? `<div style="display:inline-flex;align-items:center;margin-top:10px;font-family:Caveat,cursive;font-size:15px;color:#7a6a5c">
+         <span style="margin-right:6px">:</span>
+         ${reviewers.map((r, i) => {
+           const tone = authorPalette[palette[Math.abs(r.id || 0) % palette.length]]
+           const initial = escapeHtml((r.username || '?').slice(0, 1).toUpperCase())
+           const inner = r.avatar_url
+             ? `<img src="${r.avatar_url}" alt="" style="width:100%;height:100%;object-fit:cover;display:block" />`
+             : initial
+           const bg = r.avatar_url ? '#fdfcf7' : tone.bg
+           return `<span title="${escapeHtml(r.username || '')}" style="display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;background:${bg};color:${tone.ink};font-family:Lora,Georgia,serif;font-weight:600;font-size:10px;box-shadow:0 0 0 2px #fdfcf7,0 1px 2px rgba(40,30,20,.25);margin-left:${i === 0 ? '0' : '-6px'};overflow:hidden">${inner}</span>`
+         }).join('')}
+       </div>`
+    : ''
+
   return `<div style="min-width:200px;max-width:260px;font-family:Lora,Georgia,serif;color:#2d231b">
     ${cover}
     <div style="font-family:Lora,Georgia,serif;font-style:italic;font-weight:500;font-size:17px;line-height:1.15;color:#2d231b">${escapeHtml(place.name)}${gem}</div>
     ${metaHtml}
     <div>${ticket}</div>
-    <a href="/places/${place.id}" style="display:inline-block;font-family:Lora,Georgia,serif;font-style:italic;font-size:14px;color:#c66b3e;text-decoration:none;margin-top:10px">подробнее →</a>
+    ${peopleHtml}
+    <div><a href="/places/${place.id}" style="display:inline-block;font-family:Lora,Georgia,serif;font-style:italic;font-size:14px;color:#c66b3e;text-decoration:none;margin-top:10px">подробнее →</a></div>
   </div>`
 }
 

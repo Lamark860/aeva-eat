@@ -230,6 +230,9 @@ onMounted(load)
   margin-top: 8px;
   // Same buffer as the current-week container — keep adjacent buckets clear of tilt overlap.
   padding-bottom: 8px;
+  // DESIGN-DECISIONS L4: чуть приглушённая бумага, чтобы развёрнутый архив
+  // визуально читался как «прошлое». Деликатно, ~5–7% разницы.
+  background: var(--sb-paper-deep);
 }
 
 .collapse-btn {
