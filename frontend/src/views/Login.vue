@@ -1,6 +1,6 @@
 <template>
   <div class="row justify-content-center">
-    <div class="col-md-5">
+    <div class="col-12 col-sm-10 col-md-5">
       <div class="card shadow-sm">
         <div class="card-body">
           <h3 class="card-title text-center mb-4">Войти</h3>
@@ -32,7 +32,7 @@
               />
             </div>
 
-            <button type="submit" class="btn btn-primary w-100" :disabled="loading">
+            <button type="submit" class="btn btn-primary btn-lg w-100" :disabled="loading">
               <span v-if="loading" class="spinner-border spinner-border-sm me-1"></span>
               Войти
             </button>

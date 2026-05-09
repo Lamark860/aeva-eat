@@ -134,9 +134,9 @@
           </div>
         </div>
 
-        <!-- Кнопки -->
-        <div class="d-flex gap-2 pt-2 pb-4">
-          <button type="submit" class="btn btn-primary btn-lg flex-grow-1" :disabled="loading || !form.name">
+        <!-- Кнопки — стек вертикально на мобиле, чтобы primary CTA был полной ширины -->
+        <div class="d-flex flex-column flex-md-row gap-2 pt-2 pb-4">
+          <button type="submit" class="btn btn-primary btn-lg flex-md-grow-1" :disabled="loading || !form.name">
             <span v-if="loading" class="spinner-border spinner-border-sm me-1"></span>
             {{ isEdit ? 'Сохранить изменения' : 'Создать заведение' }}
           </button>

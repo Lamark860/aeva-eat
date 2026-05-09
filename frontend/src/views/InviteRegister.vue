@@ -1,6 +1,6 @@
 <template>
   <div class="row justify-content-center">
-    <div class="col-md-5">
+    <div class="col-12 col-sm-10 col-md-5">
       <div class="card shadow-sm">
         <div class="card-body">
           <h3 class="card-title text-center mb-4">Регистрация по приглашению</h3>

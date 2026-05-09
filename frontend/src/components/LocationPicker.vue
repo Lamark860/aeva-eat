@@ -321,6 +321,13 @@ onUnmounted(() => {
   border: 2px solid #e0ddd9;
   z-index: 0;
 }
+
+/* Drop map height on mobile so the search input + suggestions fit above the fold */
+@media (max-width: 767.98px) {
+  .location-picker-map {
+    height: 220px;
+  }
+}
 .suggest-dropdown {
   position: absolute;
   top: 100%;

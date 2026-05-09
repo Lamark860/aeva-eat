@@ -31,7 +31,7 @@
 
         <div class="mb-3">
           <label class="form-label">Дата визита</label>
-          <input v-model="form.visited_at" type="date" class="form-control" style="max-width: 200px;" />
+          <input v-model="form.visited_at" type="date" class="form-control date-input" />
         </div>
 
         <div class="mb-3">
@@ -62,12 +62,12 @@
           <VideoRecorder v-else :uploading="loading" @recorded="onVideoRecorded" />
         </div>
 
-        <div class="d-flex gap-2">
-          <button type="submit" class="btn btn-primary" :disabled="loading || !isValid">
+        <div class="d-flex flex-column flex-sm-row gap-2">
+          <button type="submit" class="btn btn-primary btn-lg flex-sm-grow-1" :disabled="loading || !isValid">
             <span v-if="loading" class="spinner-border spinner-border-sm me-1"></span>
             {{ isEdit ? 'Сохранить' : 'Отправить' }}
           </button>
-          <button v-if="isEdit" type="button" class="btn btn-outline-secondary" @click="$emit('cancel')">
+          <button v-if="isEdit" type="button" class="btn btn-outline-secondary btn-lg" @click="$emit('cancel')">
             Отмена
           </button>
         </div>
@@ -183,5 +183,15 @@ async function handleSubmit() {
   width: 100%;
   height: 100%;
   object-fit: cover;
+}
+
+/* Date input width: 200px on desktop, full-width on mobile */
+.date-input {
+  max-width: 200px;
+}
+@media (max-width: 767.98px) {
+  .date-input {
+    max-width: 100%;
+  }
 }
 </style>
