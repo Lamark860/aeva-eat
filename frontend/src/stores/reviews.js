@@ -55,6 +55,32 @@ export const useReviewsStore = defineStore('reviews', () => {
     return data
   }
 
+  // Multi-фото за один multipart-запрос. Бэк добавляет в стопку review.photos
+  // в порядке прихода. Лимит — 5 фото на отзыв; если превышен, бэк отвергает
+  // целиком (HTTP 400).
+  async function uploadReviewPhotos(placeId, reviewId, files) {
+    if (!files || files.length === 0) return null
+    const formData = new FormData()
+    for (const f of files) formData.append('photos', f)
+    const { data } = await http.post(`/places/${placeId}/reviews/${reviewId}/photos`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    })
+    const idx = reviews.value.findIndex(r => r.id === reviewId)
+    if (idx !== -1) {
+      const existing = reviews.value[idx].photos || []
+      reviews.value[idx].photos = [...existing, ...(data.photos || [])]
+    }
+    return data
+  }
+
+  async function deleteReviewPhoto(placeId, reviewId, photoId) {
+    await http.delete(`/places/${placeId}/reviews/${reviewId}/photos/${photoId}`)
+    const idx = reviews.value.findIndex(r => r.id === reviewId)
+    if (idx !== -1) {
+      reviews.value[idx].photos = (reviews.value[idx].photos || []).filter(p => p.id !== photoId)
+    }
+  }
+
   async function uploadReviewVideo(placeId, reviewId, blob) {
     const formData = new FormData()
     // Pick filename extension based on the actual blob type so the backend's
@@ -69,5 +95,17 @@ export const useReviewsStore = defineStore('reviews', () => {
     return data
   }
 
-  return { reviews, loading, fetchByPlace, fetchByUser, createReview, updateReview, deleteReview, uploadReviewImage, uploadReviewVideo }
+  return {
+    reviews,
+    loading,
+    fetchByPlace,
+    fetchByUser,
+    createReview,
+    updateReview,
+    deleteReview,
+    uploadReviewImage,
+    uploadReviewPhotos,
+    deleteReviewPhoto,
+    uploadReviewVideo,
+  }
 })

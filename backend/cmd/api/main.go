@@ -45,6 +45,9 @@ func main() {
 	reviewRepo := repository.NewReviewRepo(db)
 	wishlistRepo := repository.NewWishlistRepo(db)
 	inviteRepo := repository.NewInviteRepo(db)
+	noteRepo := repository.NewNoteRepo(db)
+	feedRepo := repository.NewFeedEventsRepo(db)
+	aggRepo := repository.NewAggregateRepo(db)
 
 	// Services
 	authService := service.NewAuthService(userRepo, inviteRepo, cfg.JWTSecret)
@@ -53,10 +56,12 @@ func main() {
 	authHandler := handler.NewAuthHandler(authService)
 	placeHandler := handler.NewPlaceHandler(placeRepo)
 	catalogHandler := handler.NewCatalogHandler(catalogRepo)
-	reviewHandler := handler.NewReviewHandler(reviewRepo)
+	reviewHandler := handler.NewReviewHandler(reviewRepo, wishlistRepo)
 	wishlistHandler := handler.NewWishlistHandler(wishlistRepo)
 	suggestHandler := handler.NewSuggestHandler(cfg.GeosuggestKey)
 	inviteHandler := handler.NewInviteHandler(inviteRepo, userRepo)
+	noteHandler := handler.NewNoteHandler(noteRepo, feedRepo)
+	aggHandler := handler.NewAggregateHandler(aggRepo, placeRepo)
 
 	// Router
 	r := chi.NewRouter()
@@ -108,14 +113,53 @@ func main() {
 			r.Delete("/{id}/reviews/{rid}", reviewHandler.Delete)
 			r.Post("/{id}/reviews/{rid}/image", reviewHandler.UploadImage)
 			r.Post("/{id}/reviews/{rid}/video", reviewHandler.UploadVideo)
+			r.Post("/{id}/reviews/{rid}/photos", reviewHandler.UploadPhotos)
+			r.Delete("/{id}/reviews/{rid}/photos/{pid}", reviewHandler.DeletePhoto)
 		})
 
-		// User reviews
-		r.Get("/api/users/{userId}/reviews", reviewHandler.ListByUser)
+		// Random place
+		r.Get("/api/random", placeHandler.Random)
+
+		// Notes
+		r.Route("/api/notes", func(r chi.Router) {
+			r.Get("/", noteHandler.List)
+			r.Post("/", noteHandler.Create)
+			r.Put("/{id}", noteHandler.Update)
+			r.Delete("/{id}", noteHandler.Delete)
+			r.Put("/{id}/strike", noteHandler.Strike)
+		})
+
+		// Feed events (общая хронология) + unread-индикатор
+		r.Get("/api/feed", noteHandler.Feed)
+		r.Get("/api/feed/weeks", noteHandler.Weeks)
+		r.Get("/api/feed/unread-count", noteHandler.UnreadCount)
+		r.Post("/api/feed/seen", noteHandler.MarkSeen)
+
+		// Cities — путеводитель по городам круга
+		r.Route("/api/cities", func(r chi.Router) {
+			r.Get("/", aggHandler.ListCities)
+			r.Get("/{name}", aggHandler.GetCity)
+			r.Get("/{name}/places", aggHandler.ListCityPlaces)
+			r.Get("/{name}/gems", aggHandler.ListCityGems)
+		})
+
+		// Users — публичный профиль и его контент
+		r.Route("/api/users", func(r chi.Router) {
+			r.Get("/", aggHandler.ListUsers)
+			r.Get("/{id}", aggHandler.GetUser)
+			r.Get("/{id}/places", aggHandler.ListUserPlaces)
+			r.Get("/{id}/gems", aggHandler.ListUserGems)
+			r.Get("/{id}/cities", aggHandler.ListUserCities)
+			r.Get("/{userId}/reviews", reviewHandler.ListByUser)
+		})
+
+		// Gems hub
+		r.Get("/api/gems", aggHandler.Gems)
 
 		// Wishlist
 		r.Route("/api/wishlist", func(r chi.Router) {
 			r.Get("/", wishlistHandler.ListMy)
+			r.Get("/all", wishlistHandler.ListAll)
 			r.Get("/ids", wishlistHandler.MyIDs)
 			r.Post("/{id}", wishlistHandler.Add)
 			r.Delete("/{id}", wishlistHandler.Remove)
@@ -162,6 +206,10 @@ func runMigrations(db *sql.DB) error {
 		"migrations/009_invites_roles.up.sql",
 		"migrations/010_review_video.up.sql",
 		"migrations/011_dict_extensions.up.sql",
+		"migrations/012_review_photos.up.sql",
+		"migrations/013_notes.up.sql",
+		"migrations/014_feed_unread.up.sql",
+		"migrations/015_wishlist_struck.up.sql",
 		"migrations/005_seed_data.up.sql",
 	}
 	for _, f := range files {

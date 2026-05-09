@@ -19,6 +19,17 @@ func NewWishlistHandler(wishlistRepo *repository.WishlistRepo) *WishlistHandler 
 	return &WishlistHandler{wishlistRepo: wishlistRepo}
 }
 
+// ListAll — общий wishlist круга (backend.md §Wishlist). Используется для
+// записок-планов на доске, где зачёркнутые читаются как "уже сходили".
+func (h *WishlistHandler) ListAll(w http.ResponseWriter, r *http.Request) {
+	entries, err := h.wishlistRepo.ListAll()
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to list wishlist"})
+		return
+	}
+	writeJSON(w, http.StatusOK, entries)
+}
+
 func (h *WishlistHandler) Add(w http.ResponseWriter, r *http.Request) {
 	userID, ok := middleware.GetUserID(r)
 	if !ok {

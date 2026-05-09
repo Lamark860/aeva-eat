@@ -25,26 +25,28 @@ type Invite struct {
 }
 
 type Place struct {
-	ID            int        `json:"id"`
-	Name          string     `json:"name"`
-	Address       *string    `json:"address,omitempty"`
-	City          *string    `json:"city,omitempty"`
-	Lat           *float64   `json:"lat,omitempty"`
-	Lng           *float64   `json:"lng,omitempty"`
-	CuisineTypeID *int       `json:"cuisine_type_id,omitempty"`
-	CuisineType   *string    `json:"cuisine_type,omitempty"`
-	Website       *string    `json:"website,omitempty"`
-	CreatedBy     *int       `json:"created_by,omitempty"`
-	Categories    []string   `json:"categories,omitempty"`
-	AvgFood       *float64   `json:"avg_food,omitempty"`
-	AvgService    *float64   `json:"avg_service,omitempty"`
-	AvgVibe       *float64   `json:"avg_vibe,omitempty"`
-	ImageURL      *string    `json:"image_url,omitempty"`
-	IsGemPlace    bool       `json:"is_gem_place"`
-	ReviewCount   int        `json:"review_count"`
-	Reviewers     []Reviewer `json:"reviewers,omitempty"`
-	CreatedAt     time.Time  `json:"created_at"`
-	UpdatedAt     time.Time  `json:"updated_at"`
+	ID                 int           `json:"id"`
+	Name               string        `json:"name"`
+	Address            *string       `json:"address,omitempty"`
+	City               *string       `json:"city,omitempty"`
+	Lat                *float64      `json:"lat,omitempty"`
+	Lng                *float64      `json:"lng,omitempty"`
+	CuisineTypeID      *int          `json:"cuisine_type_id,omitempty"`
+	CuisineType        *string       `json:"cuisine_type,omitempty"`
+	Website            *string       `json:"website,omitempty"`
+	CreatedBy          *int          `json:"created_by,omitempty"`
+	Categories         []string      `json:"categories,omitempty"`
+	AvgFood            *float64      `json:"avg_food,omitempty"`
+	AvgService         *float64      `json:"avg_service,omitempty"`
+	AvgVibe            *float64      `json:"avg_vibe,omitempty"`
+	ImageURL           *string       `json:"image_url,omitempty"`
+	IsGemPlace         bool          `json:"is_gem_place"`
+	HasVideo           bool          `json:"has_video"`
+	ReviewCount        int           `json:"review_count"`
+	Reviewers          []Reviewer    `json:"reviewers,omitempty"`
+	FeedPhotos         []ReviewPhoto `json:"feed_photos,omitempty"`
+	CreatedAt          time.Time     `json:"created_at"`
+	UpdatedAt          time.Time     `json:"updated_at"`
 }
 
 type Reviewer struct {
@@ -54,20 +56,27 @@ type Reviewer struct {
 }
 
 type Review struct {
-	ID            int       `json:"id"`
-	PlaceID       int       `json:"place_id"`
-	PlaceName     string    `json:"place_name,omitempty"`
-	FoodRating    float64   `json:"food_rating"`
-	ServiceRating float64   `json:"service_rating"`
-	VibeRating    float64   `json:"vibe_rating"`
-	IsGem         bool      `json:"is_gem"`
-	Comment       *string   `json:"comment,omitempty"`
-	ImageURL      *string   `json:"image_url,omitempty"`
-	VideoURL      *string   `json:"video_url,omitempty"`
-	VisitedAt     *string   `json:"visited_at,omitempty"`
-	Authors       []User    `json:"authors"`
-	CreatedAt     time.Time `json:"created_at"`
-	UpdatedAt     time.Time `json:"updated_at"`
+	ID            int           `json:"id"`
+	PlaceID       int           `json:"place_id"`
+	PlaceName     string        `json:"place_name,omitempty"`
+	FoodRating    float64       `json:"food_rating"`
+	ServiceRating float64       `json:"service_rating"`
+	VibeRating    float64       `json:"vibe_rating"`
+	IsGem         bool          `json:"is_gem"`
+	Comment       *string       `json:"comment,omitempty"`
+	ImageURL      *string       `json:"image_url,omitempty"`
+	VideoURL      *string       `json:"video_url,omitempty"`
+	VisitedAt     *string       `json:"visited_at,omitempty"`
+	Authors       []User        `json:"authors"`
+	Photos        []ReviewPhoto `json:"photos"`
+	CreatedAt     time.Time     `json:"created_at"`
+	UpdatedAt     time.Time     `json:"updated_at"`
+}
+
+type ReviewPhoto struct {
+	ID       int    `json:"id"`
+	URL      string `json:"url"`
+	Position int    `json:"position"`
 }
 
 type CuisineType struct {
@@ -80,10 +89,107 @@ type Category struct {
 	Name string `json:"name"`
 }
 
+// WishlistEntry — запись общего wishlist круга для GET /api/wishlist/all.
+// Содержит автора, место и флаг "зачёркнуто" (визит уже состоялся).
+type WishlistEntry struct {
+	UserID    int        `json:"user_id"`
+	Username  string     `json:"username"`
+	AvatarURL *string    `json:"avatar_url,omitempty"`
+	Place     Place      `json:"place"`
+	IsStruck  bool       `json:"is_struck"`
+	StruckAt  *time.Time `json:"struck_at,omitempty"`
+	CreatedAt time.Time  `json:"created_at"`
+}
+
 type WishlistCustom struct {
 	ID        int       `json:"id"`
 	UserID    int       `json:"user_id"`
 	Name      string    `json:"name"`
 	Note      *string   `json:"note,omitempty"`
 	CreatedAt time.Time `json:"created_at"`
+}
+
+// Note — записка от руки на доске (backend.md §notes). Может быть привязана
+// к месту/городу, имеет цвет бумаги/тейпа и флаг "зачёркнуто".
+type Note struct {
+	ID         int       `json:"id"`
+	AuthorID   int       `json:"author_id"`
+	Author     *User     `json:"author,omitempty"`
+	Text       string    `json:"text"`
+	PlaceID    *int      `json:"place_id,omitempty"`
+	PlaceName  *string   `json:"place_name,omitempty"`
+	City       *string   `json:"city,omitempty"`
+	PaperColor *string   `json:"paper_color,omitempty"`
+	TapeColor  *string   `json:"tape_color,omitempty"`
+	IsStruck   bool      `json:"is_struck"`
+	CreatedAt  time.Time `json:"created_at"`
+	UpdatedAt  time.Time `json:"updated_at"`
+}
+
+// FeedWeek — агрегат недели для свернутых полосок CollapsedStrip
+// (backend.md §Лента/Доска: GET /api/feed/weeks). WeekStart — понедельник
+// 00:00 UTC, ISO-week формата YYYY-Www в Key.
+type FeedWeek struct {
+	Key       string    `json:"key"`        // YYYY-Www, например 2026-W19
+	WeekStart time.Time `json:"week_start"`
+	Count     int       `json:"count"`
+	GemCount  int       `json:"gem_count"`
+}
+
+// FeedEvent — строка из VIEW feed_events. Объединяет review_added /
+// note_added в одну хронологию. Поля review_id и note_id взаимоисключающие.
+type FeedEvent struct {
+	Kind       string    `json:"kind"`
+	EventID    int       `json:"event_id"`
+	OccurredAt time.Time `json:"occurred_at"`
+	PlaceID    *int      `json:"place_id,omitempty"`
+	AuthorID   *int      `json:"author_id,omitempty"`
+	ReviewID   *int      `json:"review_id,omitempty"`
+	NoteID     *int      `json:"note_id,omitempty"`
+}
+
+// CityAggregate — строка для /api/cities: имя города + счётчики мест,
+// жемчужин и уникальных авторов отзывов в этом городе. Используется на
+// странице города и в полке "По городам" в Найти.
+type CityAggregate struct {
+	City             string `json:"city"`
+	Count            int    `json:"count"`
+	GemCount         int    `json:"gem_count"`
+	ContributorCount int    `json:"contributor_count"`
+}
+
+// UserProfile — публичный профиль пользователя для /api/users/:id.
+// Содержит то, что не стыдно показать гостю круга: статистики посещений,
+// жемчужин и городов. Email/role/password остаются на User.
+type UserProfile struct {
+	ID            int     `json:"id"`
+	Username      string  `json:"username"`
+	DisplayName   *string `json:"display_name,omitempty"`
+	AvatarURL     *string `json:"avatar_url,omitempty"`
+	PlaceCount    int     `json:"place_count"`
+	GemCount      int     `json:"gem_count"`
+	CityCount     int     `json:"city_count"`
+	ReviewCount   int     `json:"review_count"`
+}
+
+// UserCity — город визитов конкретного пользователя.
+type UserCity struct {
+	City  string `json:"city"`
+	Count int    `json:"count"`
+}
+
+// GemsHub — ответ /api/gems: список мест-жемчужин + агрегаты по городам
+// и авторам.
+type GemsHub struct {
+	Places []Place         `json:"places"`
+	Total  int             `json:"total"`
+	ByCity []CityAggregate `json:"by_city"`
+	ByUser []UserGemCount  `json:"by_user"`
+}
+
+type UserGemCount struct {
+	UserID    int     `json:"user_id"`
+	Username  string  `json:"username"`
+	AvatarURL *string `json:"avatar_url,omitempty"`
+	Count     int     `json:"count"`
 }

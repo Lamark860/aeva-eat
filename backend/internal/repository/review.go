@@ -48,6 +48,12 @@ func (r *ReviewRepo) ListByPlace(placeID int) ([]model.Review, error) {
 			return nil, err
 		}
 		reviews[i].Authors = authors
+
+		photos, err := r.ListPhotos(reviews[i].ID)
+		if err != nil {
+			return nil, err
+		}
+		reviews[i].Photos = photos
 	}
 
 	return reviews, nil
@@ -89,6 +95,12 @@ func (r *ReviewRepo) ListByUser(userID int) ([]model.Review, error) {
 			return nil, err
 		}
 		reviews[i].Authors = authors
+
+		photos, err := r.ListPhotos(reviews[i].ID)
+		if err != nil {
+			return nil, err
+		}
+		reviews[i].Photos = photos
 	}
 
 	return reviews, nil
@@ -112,6 +124,12 @@ func (r *ReviewRepo) GetByID(id int) (*model.Review, error) {
 		return nil, err
 	}
 	rv.Authors = authors
+
+	photos, err := r.ListPhotos(rv.ID)
+	if err != nil {
+		return nil, err
+	}
+	rv.Photos = photos
 
 	return rv, nil
 }
@@ -178,6 +196,137 @@ func (r *ReviewRepo) IsAuthor(reviewID, userID int) (bool, error) {
 func (r *ReviewRepo) UpdateImageURL(reviewID int, imageURL string) error {
 	_, err := r.db.Exec(`UPDATE reviews SET image_url = $1, updated_at = now() WHERE id = $2`, imageURL, reviewID)
 	return err
+}
+
+// ListPhotos возвращает фото отзыва, отсортированные по position (затем id).
+func (r *ReviewRepo) ListPhotos(reviewID int) ([]model.ReviewPhoto, error) {
+	rows, err := r.db.Query(`
+		SELECT id, url, position
+		FROM review_photos
+		WHERE review_id = $1
+		ORDER BY position ASC, id ASC
+	`, reviewID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	photos := []model.ReviewPhoto{}
+	for rows.Next() {
+		var p model.ReviewPhoto
+		if err := rows.Scan(&p.ID, &p.URL, &p.Position); err != nil {
+			return nil, err
+		}
+		photos = append(photos, p)
+	}
+	return photos, rows.Err()
+}
+
+// CountPhotos — текущее число фото для лимита 5.
+func (r *ReviewRepo) CountPhotos(reviewID int) (int, error) {
+	var n int
+	err := r.db.QueryRow(`SELECT COUNT(*) FROM review_photos WHERE review_id = $1`, reviewID).Scan(&n)
+	return n, err
+}
+
+// AddPhoto добавляет фото в конец стопки. Возвращает созданную запись.
+// Если это первое фото и у отзыва нет image_url — синхронизирует image_url
+// для backwards-compat (cover-fallback в /api/places).
+func (r *ReviewRepo) AddPhoto(reviewID int, url string) (*model.ReviewPhoto, error) {
+	tx, err := r.db.Begin()
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+
+	var nextPos int
+	err = tx.QueryRow(
+		`SELECT COALESCE(MAX(position), -1) + 1 FROM review_photos WHERE review_id = $1`,
+		reviewID,
+	).Scan(&nextPos)
+	if err != nil {
+		return nil, err
+	}
+
+	p := &model.ReviewPhoto{URL: url, Position: nextPos}
+	err = tx.QueryRow(
+		`INSERT INTO review_photos (review_id, url, position) VALUES ($1, $2, $3) RETURNING id`,
+		reviewID, url, nextPos,
+	).Scan(&p.ID)
+	if err != nil {
+		return nil, err
+	}
+
+	if nextPos == 0 {
+		_, err = tx.Exec(
+			`UPDATE reviews SET image_url = $1, updated_at = now()
+			 WHERE id = $2 AND (image_url IS NULL OR image_url = '')`,
+			url, reviewID,
+		)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+	return p, nil
+}
+
+// GetPhoto возвращает запись по id (нужен handler'у — узнать review_id и url
+// для проверки авторства и удаления файла с диска).
+func (r *ReviewRepo) GetPhoto(photoID int) (*model.ReviewPhoto, int, error) {
+	var p model.ReviewPhoto
+	var reviewID int
+	err := r.db.QueryRow(
+		`SELECT id, url, position, review_id FROM review_photos WHERE id = $1`,
+		photoID,
+	).Scan(&p.ID, &p.URL, &p.Position, &reviewID)
+	if err != nil {
+		return nil, 0, err
+	}
+	return &p, reviewID, nil
+}
+
+// DeletePhoto удаляет одно фото. Если это было фото на позиции 0,
+// синкает image_url отзыва на следующее (или NULL, если стопка пуста).
+func (r *ReviewRepo) DeletePhoto(photoID int) error {
+	tx, err := r.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	var reviewID, pos int
+	err = tx.QueryRow(
+		`DELETE FROM review_photos WHERE id = $1 RETURNING review_id, position`,
+		photoID,
+	).Scan(&reviewID, &pos)
+	if err != nil {
+		return err
+	}
+
+	if pos == 0 {
+		var nextURL sql.NullString
+		err = tx.QueryRow(
+			`SELECT url FROM review_photos WHERE review_id = $1 ORDER BY position ASC, id ASC LIMIT 1`,
+			reviewID,
+		).Scan(&nextURL)
+		if err != nil && err != sql.ErrNoRows {
+			return err
+		}
+		if nextURL.Valid {
+			_, err = tx.Exec(`UPDATE reviews SET image_url = $1, updated_at = now() WHERE id = $2`, nextURL.String, reviewID)
+		} else {
+			_, err = tx.Exec(`UPDATE reviews SET image_url = NULL, updated_at = now() WHERE id = $1`, reviewID)
+		}
+		if err != nil {
+			return err
+		}
+	}
+
+	return tx.Commit()
 }
 
 func (r *ReviewRepo) UpdateVideoURL(reviewID int, videoURL string) error {

@@ -4,10 +4,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"mime/multipart"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 
 	"github.com/aeva-eat/backend/internal/imageutil"
 	"github.com/aeva-eat/backend/internal/middleware"
@@ -18,11 +20,12 @@ import (
 )
 
 type ReviewHandler struct {
-	reviewRepo *repository.ReviewRepo
+	reviewRepo   *repository.ReviewRepo
+	wishlistRepo *repository.WishlistRepo
 }
 
-func NewReviewHandler(reviewRepo *repository.ReviewRepo) *ReviewHandler {
-	return &ReviewHandler{reviewRepo: reviewRepo}
+func NewReviewHandler(reviewRepo *repository.ReviewRepo, wishlistRepo *repository.WishlistRepo) *ReviewHandler {
+	return &ReviewHandler{reviewRepo: reviewRepo, wishlistRepo: wishlistRepo}
 }
 
 type createReviewRequest struct {
@@ -122,6 +125,16 @@ func (h *ReviewHandler) Create(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to create review"})
 		return
 	}
+
+	// backend.md §Wishlist: при создании review у соавторов, у которых это
+	// место было в wishlist, ставим struck=true. Best-effort — ошибки не
+	// фейлят основной запрос; review уже создан.
+	if h.wishlistRepo != nil {
+		for _, uid := range authorIDs {
+			_, _ = h.wishlistRepo.MarkStruck(uid, placeID)
+		}
+	}
+
 	writeJSON(w, http.StatusCreated, created)
 }
 
@@ -223,6 +236,11 @@ func validateRatings(food, service, vibe float64) error {
 	return nil
 }
 
+const maxPhotosPerReview = 5
+
+// UploadImage — legacy single-photo endpoint. Сохранён для backwards-compat,
+// но теперь добавляет фото в review_photos через AddPhoto (то же поведение,
+// что и новый /photos endpoint при загрузке одного файла).
 func (h *ReviewHandler) UploadImage(w http.ResponseWriter, r *http.Request) {
 	userID, ok := middleware.GetUserID(r)
 	if !ok {
@@ -258,34 +276,197 @@ func (h *ReviewHandler) UploadImage(w http.ResponseWriter, r *http.Request) {
 	}
 	defer file.Close()
 
-	ct := header.Header.Get("Content-Type")
-	allowedTypes := map[string]string{"image/jpeg": ".jpg", "image/png": ".png", "image/webp": ".webp"}
-	if _, ok := allowedTypes[ct]; !ok {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "only JPEG, PNG and WebP images are allowed"})
+	url, perr := h.processAndStorePhoto(file, header)
+	if perr != nil {
+		writeJSON(w, perr.statusCode(), map[string]string{"error": perr.Error()})
 		return
+	}
+
+	count, err := h.reviewRepo.CountPhotos(reviewID)
+	if err != nil {
+		removeUploaded(url)
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to count photos"})
+		return
+	}
+	if count >= maxPhotosPerReview {
+		removeUploaded(url)
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": fmt.Sprintf("review already has %d photos", maxPhotosPerReview)})
+		return
+	}
+
+	if _, err := h.reviewRepo.AddPhoto(reviewID, url); err != nil {
+		removeUploaded(url)
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to save photo"})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]string{"image_url": url})
+}
+
+// UploadPhotos принимает до maxPhotosPerReview файлов в поле "photos" одним
+// multipart-запросом и добавляет их в стопку review.photos в порядке прихода.
+// Если total после загрузки превысит лимит — отвергает целиком (atomic enough).
+func (h *ReviewHandler) UploadPhotos(w http.ResponseWriter, r *http.Request) {
+	userID, ok := middleware.GetUserID(r)
+	if !ok {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+		return
+	}
+
+	reviewID, err := strconv.Atoi(chi.URLParam(r, "rid"))
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid review id"})
+		return
+	}
+
+	isAuthor, err := h.reviewRepo.IsAuthor(reviewID, userID)
+	if err != nil {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "review not found"})
+		return
+	}
+	if !isAuthor {
+		writeJSON(w, http.StatusForbidden, map[string]string{"error": "you can only upload photos for your own reviews"})
+		return
+	}
+
+	// 5MB на файл × 5 = 25MB лимит формы.
+	if err := r.ParseMultipartForm(25 << 20); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "form too large (max 25MB total)"})
+		return
+	}
+
+	files := r.MultipartForm.File["photos"]
+	if len(files) == 0 {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "photos field required"})
+		return
+	}
+
+	count, err := h.reviewRepo.CountPhotos(reviewID)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to count photos"})
+		return
+	}
+	if count+len(files) > maxPhotosPerReview {
+		writeJSON(w, http.StatusBadRequest, map[string]string{
+			"error": fmt.Sprintf("max %d photos per review (have %d, tried to add %d)", maxPhotosPerReview, count, len(files)),
+		})
+		return
+	}
+
+	created := make([]model.ReviewPhoto, 0, len(files))
+	urls := make([]string, 0, len(files))
+
+	for _, header := range files {
+		file, err := header.Open()
+		if err != nil {
+			rollbackPhotos(h, urls, created)
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "failed to read file"})
+			return
+		}
+		url, perr := h.processAndStorePhoto(file, header)
+		file.Close()
+		if perr != nil {
+			rollbackPhotos(h, urls, created)
+			writeJSON(w, perr.statusCode(), map[string]string{"error": perr.Error()})
+			return
+		}
+		photo, dberr := h.reviewRepo.AddPhoto(reviewID, url)
+		if dberr != nil {
+			removeUploaded(url)
+			rollbackPhotos(h, urls, created)
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to save photo"})
+			return
+		}
+		urls = append(urls, url)
+		created = append(created, *photo)
+	}
+
+	writeJSON(w, http.StatusCreated, map[string]any{"photos": created})
+}
+
+// DeletePhoto удаляет одно фото из стопки. Author-only через review.
+func (h *ReviewHandler) DeletePhoto(w http.ResponseWriter, r *http.Request) {
+	userID, ok := middleware.GetUserID(r)
+	if !ok {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+		return
+	}
+
+	photoID, err := strconv.Atoi(chi.URLParam(r, "pid"))
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid photo id"})
+		return
+	}
+
+	photo, reviewID, err := h.reviewRepo.GetPhoto(photoID)
+	if err != nil {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "photo not found"})
+		return
+	}
+
+	isAuthor, err := h.reviewRepo.IsAuthor(reviewID, userID)
+	if err != nil || !isAuthor {
+		writeJSON(w, http.StatusForbidden, map[string]string{"error": "you can only delete photos from your own reviews"})
+		return
+	}
+
+	if err := h.reviewRepo.DeletePhoto(photoID); err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to delete photo"})
+		return
+	}
+
+	removeUploaded(photo.URL)
+	writeJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
+}
+
+// uploadErr — обёртка для проброса HTTP-статуса из processAndStorePhoto наверх.
+type uploadErr struct {
+	msg  string
+	code int
+}
+
+func (e *uploadErr) Error() string     { return e.msg }
+func (e *uploadErr) statusCode() int   { return e.code }
+func badInput(msg string) *uploadErr   { return &uploadErr{msg: msg, code: http.StatusBadRequest} }
+func internal(msg string) *uploadErr   { return &uploadErr{msg: msg, code: http.StatusInternalServerError} }
+
+// processAndStorePhoto проверяет тип, прогоняет через imageutil (auto-orient
+// + JPEG q=75) и пишет результат в /uploads. Возвращает публичный URL.
+func (h *ReviewHandler) processAndStorePhoto(file io.Reader, header *multipart.FileHeader) (string, *uploadErr) {
+	ct := header.Header.Get("Content-Type")
+	if _, ok := allowedImageTypes[ct]; !ok {
+		return "", badInput("only JPEG, PNG and WebP images are allowed")
+	}
+
+	if err := os.MkdirAll("uploads", 0o755); err != nil {
+		return "", internal("failed to create uploads directory")
 	}
 
 	filename := fmt.Sprintf("%s.jpg", uuid.New().String())
-	uploadsDir := "uploads"
-	if err := os.MkdirAll(uploadsDir, 0o755); err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to create uploads directory"})
-		return
-	}
-
-	dstPath := filepath.Join(uploadsDir, filename)
+	dstPath := filepath.Join("uploads", filename)
 	if err := imageutil.Process(file, dstPath); err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to process image"})
+		return "", internal("failed to process image")
+	}
+	return "/uploads/" + filename, nil
+}
+
+func removeUploaded(url string) {
+	if url == "" {
 		return
 	}
+	// "/uploads/foo.jpg" → "uploads/foo.jpg"
+	rel := strings.TrimPrefix(url, "/")
+	_ = os.Remove(rel)
+}
 
-	imageURL := "/uploads/" + filename
-	if err := h.reviewRepo.UpdateImageURL(reviewID, imageURL); err != nil {
-		os.Remove(dstPath)
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to update review image"})
-		return
+// rollbackPhotos чистит уже сохранённые в этом запросе фото при middle-failure.
+func rollbackPhotos(h *ReviewHandler, urls []string, created []model.ReviewPhoto) {
+	for _, p := range created {
+		_ = h.reviewRepo.DeletePhoto(p.ID)
 	}
-
-	writeJSON(w, http.StatusOK, map[string]string{"image_url": imageURL})
+	for _, u := range urls {
+		removeUploaded(u)
+	}
 }
 
 var allowedVideoTypes = map[string]string{

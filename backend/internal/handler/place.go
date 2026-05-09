@@ -67,6 +67,29 @@ func parsePlaceListFilter(q url.Values) repository.PlaceFilter {
 		isGem := true
 		filter.IsGem = &isGem
 	}
+	if v := q.Get("attended_by"); v != "" {
+		for _, s := range strings.Split(v, ",") {
+			if id, err := strconv.Atoi(strings.TrimSpace(s)); err == nil {
+				filter.AttendedBy = append(filter.AttendedBy, id)
+			}
+		}
+	}
+	if v := q.Get("visit_from"); v != "" {
+		filter.VisitFrom = v
+	}
+	if v := q.Get("visit_to"); v != "" {
+		filter.VisitTo = v
+	}
+	// sort=rating_user:<id> — раскладываем на canonical "rating_user" + id.
+	if strings.HasPrefix(filter.Sort, "rating_user:") {
+		if id, err := strconv.Atoi(strings.TrimPrefix(filter.Sort, "rating_user:")); err == nil && id > 0 {
+			filter.Sort = "rating_user"
+			filter.SortRatingUserID = id
+		} else {
+			// невалидный — фоллбэк на дефолт
+			filter.Sort = ""
+		}
+	}
 
 	// Pagination
 	limit := 20
@@ -265,6 +288,38 @@ var allowedImageTypes = map[string]string{
 	"image/jpeg": ".jpg",
 	"image/png":  ".png",
 	"image/webp": ".webp",
+}
+
+// Random — GET /api/random?city=&cuisine_type_id=&is_gem=true&exclude_visited_by=me
+// (NEXT.md §B5). exclude_visited_by=me использует id текущего пользователя
+// из JWT, иначе принимает явный user_id. 404 если ничего не подошло.
+func (h *PlaceHandler) Random(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	filter := parsePlaceListFilter(q)
+	filter.Limit = 0
+	filter.Offset = 0
+
+	var excludeUser int
+	if exclude := q.Get("exclude_visited_by"); exclude != "" {
+		if exclude == "me" {
+			if uid, ok := middleware.GetUserID(r); ok {
+				excludeUser = uid
+			}
+		} else if id, err := strconv.Atoi(exclude); err == nil {
+			excludeUser = id
+		}
+	}
+
+	place, err := h.placeRepo.Random(filter, excludeUser)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to pick random place"})
+		return
+	}
+	if place == nil {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "no place matches filters"})
+		return
+	}
+	writeJSON(w, http.StatusOK, place)
 }
 
 func (h *PlaceHandler) UploadImage(w http.ResponseWriter, r *http.Request) {

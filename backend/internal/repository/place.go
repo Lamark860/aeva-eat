@@ -31,8 +31,17 @@ type PlaceFilter struct {
 	IsGem          *bool
 	Search         string
 	Sort           string
-	Limit          int
-	Offset         int
+	// B5 — расширенные фильтры (backend.md §/api/places).
+	// AttendedBy: места, в которых хотя бы один из этих пользователей был.
+	// VisitFrom/To: окно по дате визита (RFC3339-date YYYY-MM-DD).
+	// SortRatingUserID: при Sort=="rating_user" сортируем по среднему
+	// рейтингу конкретного пользователя (а не среднего по кругу).
+	AttendedBy       []int
+	VisitFrom        string
+	VisitTo          string
+	SortRatingUserID int
+	Limit            int
+	Offset           int
 }
 
 type PlaceListResult struct {
@@ -103,6 +112,32 @@ func (r *PlaceRepo) List(f PlaceFilter) (*PlaceListResult, error) {
 		args = append(args, "%"+escapeLike(s)+"%")
 		argIdx++
 	}
+	if len(f.AttendedBy) > 0 {
+		placeholders := make([]string, len(f.AttendedBy))
+		for i, id := range f.AttendedBy {
+			placeholders[i] = fmt.Sprintf("$%d", argIdx)
+			args = append(args, id)
+			argIdx++
+		}
+		conditions = append(conditions, fmt.Sprintf(
+			`EXISTS (SELECT 1 FROM reviews rv JOIN review_authors ra ON ra.review_id = rv.id
+			           WHERE rv.place_id = p.id AND ra.user_id IN (%s))`,
+			strings.Join(placeholders, ",")))
+	}
+	if f.VisitFrom != "" {
+		conditions = append(conditions, fmt.Sprintf(
+			`EXISTS (SELECT 1 FROM reviews rv WHERE rv.place_id = p.id
+			          AND rv.visited_at IS NOT NULL AND rv.visited_at >= $%d)`, argIdx))
+		args = append(args, f.VisitFrom)
+		argIdx++
+	}
+	if f.VisitTo != "" {
+		conditions = append(conditions, fmt.Sprintf(
+			`EXISTS (SELECT 1 FROM reviews rv WHERE rv.place_id = p.id
+			          AND rv.visited_at IS NOT NULL AND rv.visited_at <= $%d)`, argIdx))
+		args = append(args, f.VisitTo)
+		argIdx++
+	}
 
 	whereClause := ""
 	if len(conditions) > 0 {
@@ -132,7 +167,8 @@ func (r *PlaceRepo) List(f PlaceFilter) (*PlaceListResult, error) {
 			p.created_at, p.updated_at,
 			COALESCE(rs.avg_food, 0), COALESCE(rs.avg_service, 0), COALESCE(rs.avg_vibe, 0),
 			COALESCE(rs.review_count, 0),
-			EXISTS(SELECT 1 FROM reviews rv WHERE rv.place_id = p.id AND rv.is_gem = true) AS is_gem_place
+			EXISTS(SELECT 1 FROM reviews rv WHERE rv.place_id = p.id AND rv.is_gem = true) AS is_gem_place,
+			EXISTS(SELECT 1 FROM reviews rv WHERE rv.place_id = p.id AND rv.video_url IS NOT NULL AND rv.video_url <> '') AS has_video
 	` + baseFrom + whereClause
 
 	// All ORDER BY clauses end with `p.id DESC` as a stable tiebreaker — without it,
@@ -145,6 +181,20 @@ func (r *PlaceRepo) List(f PlaceFilter) (*PlaceListResult, error) {
 		query += ` ORDER BY (rs.avg_food IS NULL) ASC, (COALESCE(rs.avg_food,0) + COALESCE(rs.avg_service,0) + COALESCE(rs.avg_vibe,0)) ASC, p.id DESC`
 	case "name":
 		query += " ORDER BY p.name, p.id DESC"
+	case "rating_user":
+		// Сортировка по среднему рейтингу конкретного пользователя.
+		// Подзапрос вытаскивает avg(всех 3-х рейтингов) для $userID;
+		// места без его отзыва идут в конце (NULLS LAST).
+		query += fmt.Sprintf(`
+			ORDER BY (
+				SELECT (rv.food_rating + rv.service_rating + rv.vibe_rating) / 3.0
+				FROM reviews rv
+				JOIN review_authors ra ON ra.review_id = rv.id
+				WHERE rv.place_id = p.id AND ra.user_id = $%d
+				ORDER BY rv.created_at DESC LIMIT 1
+			) DESC NULLS LAST, p.id DESC`, argIdx)
+		args = append(args, f.SortRatingUserID)
+		argIdx++
 	default:
 		query += " ORDER BY p.created_at DESC, p.id DESC"
 	}
@@ -170,7 +220,7 @@ func (r *PlaceRepo) List(f PlaceFilter) (*PlaceListResult, error) {
 			&p.CuisineTypeID, &p.CuisineType, &p.Website,
 			&p.CreatedBy, &p.ImageURL, &p.CreatedAt, &p.UpdatedAt,
 			&avgFood, &avgService, &avgVibe, &p.ReviewCount,
-			&p.IsGemPlace,
+			&p.IsGemPlace, &p.HasVideo,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("scan place: %w", err)
@@ -193,6 +243,12 @@ func (r *PlaceRepo) List(f PlaceFilter) (*PlaceListResult, error) {
 			return nil, err
 		}
 		places[i].Reviewers = reviewers
+
+		photos, err := r.getFeedPhotos(places[i].ID)
+		if err != nil {
+			return nil, err
+		}
+		places[i].FeedPhotos = photos
 	}
 
 	return &PlaceListResult{Places: places, Total: total}, nil
@@ -216,7 +272,8 @@ func (r *PlaceRepo) GetByID(id int) (*model.Place, error) {
 			p.created_at, p.updated_at,
 			COALESCE(rs.avg_food, 0), COALESCE(rs.avg_service, 0), COALESCE(rs.avg_vibe, 0),
 			COALESCE(rs.review_count, 0),
-			EXISTS(SELECT 1 FROM reviews rv WHERE rv.place_id = p.id AND rv.is_gem = true) AS is_gem_place
+			EXISTS(SELECT 1 FROM reviews rv WHERE rv.place_id = p.id AND rv.is_gem = true) AS is_gem_place,
+			EXISTS(SELECT 1 FROM reviews rv WHERE rv.place_id = p.id AND rv.video_url IS NOT NULL AND rv.video_url <> '') AS has_video
 		FROM places p
 		LEFT JOIN cuisine_types ct ON ct.id = p.cuisine_type_id
 		LEFT JOIN (
@@ -233,7 +290,7 @@ func (r *PlaceRepo) GetByID(id int) (*model.Place, error) {
 		&p.CuisineTypeID, &p.CuisineType, &p.Website,
 		&p.CreatedBy, &p.ImageURL, &p.CreatedAt, &p.UpdatedAt,
 		&avgFood, &avgService, &avgVibe, &p.ReviewCount,
-		&p.IsGemPlace,
+		&p.IsGemPlace, &p.HasVideo,
 	)
 	if err != nil {
 		return nil, err
@@ -265,6 +322,12 @@ func (r *PlaceRepo) GetByID(id int) (*model.Place, error) {
 		return nil, err
 	}
 	p.Reviewers = reviewers
+
+	photos, err := r.getFeedPhotos(id)
+	if err != nil {
+		return nil, err
+	}
+	p.FeedPhotos = photos
 
 	return p, rows.Err()
 }
@@ -363,6 +426,84 @@ func (r *PlaceRepo) ListCities() ([]string, error) {
 		cities = append(cities, city)
 	}
 	return cities, rows.Err()
+}
+
+// Random — случайное место из подходящих под фильтр. Если excludeVisitedBy
+// > 0, исключает места, где этот пользователь уже оставил отзыв (B5: «мне
+// повезёт» с exclude_visited_by). Возвращает nil, nil если ничего не нашлось.
+func (r *PlaceRepo) Random(f PlaceFilter, excludeVisitedBy int) (*model.Place, error) {
+	var conditions []string
+	var args []any
+	argIdx := 1
+
+	if f.City != "" {
+		conditions = append(conditions, fmt.Sprintf("LOWER(p.city) = LOWER($%d)", argIdx))
+		args = append(args, f.City)
+		argIdx++
+	}
+	if len(f.CuisineTypeIDs) > 0 {
+		placeholders := make([]string, len(f.CuisineTypeIDs))
+		for i, id := range f.CuisineTypeIDs {
+			placeholders[i] = fmt.Sprintf("$%d", argIdx)
+			args = append(args, id)
+			argIdx++
+		}
+		conditions = append(conditions, fmt.Sprintf("p.cuisine_type_id IN (%s)", strings.Join(placeholders, ",")))
+	}
+	if f.IsGem != nil && *f.IsGem {
+		conditions = append(conditions, `EXISTS (SELECT 1 FROM reviews rv WHERE rv.place_id = p.id AND rv.is_gem = true)`)
+	}
+	if excludeVisitedBy > 0 {
+		conditions = append(conditions, fmt.Sprintf(
+			`NOT EXISTS (SELECT 1 FROM reviews rv JOIN review_authors ra ON ra.review_id = rv.id
+			              WHERE rv.place_id = p.id AND ra.user_id = $%d)`, argIdx))
+		args = append(args, excludeVisitedBy)
+		argIdx++
+	}
+
+	where := ""
+	if len(conditions) > 0 {
+		where = " WHERE " + strings.Join(conditions, " AND ")
+	}
+
+	var id int
+	err := r.db.QueryRow(`SELECT p.id FROM places p`+where+` ORDER BY random() LIMIT 1`, args...).Scan(&id)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return r.GetByID(id)
+}
+
+// getFeedPhotos пулит фото по ВСЕМ отзывам места — стопка на ArtifactCard
+// представляет все фото круга (DESIGN-DECISIONS §L1: один полароид на place,
+// авторы стекаются → их фото тоже стекаются). Сортировка: сперва свежие
+// отзывы, внутри отзыва — по position. Лимит 5 для визуальной плотности.
+func (r *PlaceRepo) getFeedPhotos(placeID int) ([]model.ReviewPhoto, error) {
+	rows, err := r.db.Query(`
+		SELECT rp.id, rp.url, rp.position
+		FROM review_photos rp
+		JOIN reviews rv ON rv.id = rp.review_id
+		WHERE rv.place_id = $1
+		ORDER BY rv.created_at DESC, rv.id DESC, rp.position ASC, rp.id ASC
+		LIMIT 5
+	`, placeID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	photos := []model.ReviewPhoto{}
+	for rows.Next() {
+		var p model.ReviewPhoto
+		if err := rows.Scan(&p.ID, &p.URL, &p.Position); err != nil {
+			return nil, err
+		}
+		photos = append(photos, p)
+	}
+	return photos, rows.Err()
 }
 
 func (r *PlaceRepo) getReviewers(placeID int) ([]model.Reviewer, error) {

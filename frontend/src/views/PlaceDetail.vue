@@ -26,7 +26,13 @@
         <h1 class="title">{{ place.name }}</h1>
 
         <div class="stamps">
-          <Stamp v-if="place.city" kind="ink">{{ place.city }}</Stamp>
+          <router-link
+            v-if="place.city"
+            :to="`/cities/${encodeURIComponent(place.city)}`"
+            class="stamp-link"
+          >
+            <Stamp kind="ink">{{ place.city }}</Stamp>
+          </router-link>
           <Stamp v-if="place.cuisine_type">{{ place.cuisine_type }}</Stamp>
           <Stamp
             v-for="cat in place.categories || []"
@@ -35,7 +41,9 @@
           >
 {{ cat }}
 </Stamp>
-          <Stamp v-if="place.is_gem_place" kind="gem">жемчужина</Stamp>
+          <router-link v-if="place.is_gem_place" to="/gems" class="stamp-link">
+            <Stamp kind="gem">жемчужина</Stamp>
+          </router-link>
         </div>
 
         <div v-if="place.address" class="hand-meta">{{ place.address }}</div>
@@ -246,14 +254,15 @@ function canEditReview(rv) {
 }
 
 async function handleCreateReview(data) {
-  const photoFile = data._photoFile
-  const videoFile = data._videoFile
-  delete data._photoFile
+  const newPhotoFiles = data._newPhotoFiles || []
+  const videoFile     = data._videoFile
+  delete data._newPhotoFiles
+  delete data._removedPhotoIds
   delete data._videoFile
   try {
     const created = await reviewsStore.createReview(place.value.id, data)
-    if (photoFile && created?.id) {
-      await reviewsStore.uploadReviewImage(place.value.id, created.id, photoFile)
+    if (newPhotoFiles.length > 0 && created?.id) {
+      await reviewsStore.uploadReviewPhotos(place.value.id, created.id, newPhotoFiles)
     }
     if (videoFile && created?.id) {
       await reviewsStore.uploadReviewVideo(place.value.id, created.id, videoFile)
@@ -269,17 +278,23 @@ async function handleCreateReview(data) {
 }
 
 async function handleUpdateReview(data) {
-  const photoFile = data._photoFile
-  const videoFile = data._videoFile
-  delete data._photoFile
+  const newPhotoFiles   = data._newPhotoFiles || []
+  const removedPhotoIds = data._removedPhotoIds || []
+  const videoFile       = data._videoFile
+  delete data._newPhotoFiles
+  delete data._removedPhotoIds
   delete data._videoFile
+  const reviewId = editingReview.value.id
   try {
-    await reviewsStore.updateReview(place.value.id, editingReview.value.id, data)
-    if (photoFile) {
-      await reviewsStore.uploadReviewImage(place.value.id, editingReview.value.id, photoFile)
+    await reviewsStore.updateReview(place.value.id, reviewId, data)
+    for (const pid of removedPhotoIds) {
+      await reviewsStore.deleteReviewPhoto(place.value.id, reviewId, pid)
+    }
+    if (newPhotoFiles.length > 0) {
+      await reviewsStore.uploadReviewPhotos(place.value.id, reviewId, newPhotoFiles)
     }
     if (videoFile) {
-      await reviewsStore.uploadReviewVideo(place.value.id, editingReview.value.id, videoFile)
+      await reviewsStore.uploadReviewVideo(place.value.id, reviewId, videoFile)
     }
     editingReview.value = null
     toast.success('Отзыв обновлён')
@@ -364,6 +379,12 @@ onMounted(async () => {
   gap: 6px;
   justify-content: center;
   margin: 0 0 8px;
+}
+.stamp-link {
+  text-decoration: none;
+  color: inherit;
+  display: inline-flex;
+  &:hover :deep(.sb-stamp) { transform: rotate(2deg) scale(1.05); }
 }
 
 .hand-meta {

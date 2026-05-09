@@ -2,7 +2,7 @@
 
 Живой документ синка между разработкой и дизайном. Обновляется в каждом подходе.
 
-Последнее обновление: 2026-05-09 (раунд 3 — все хвосты закрыты).
+Последнее обновление: 2026-05-09 (раунд 4 — backend дельта + интеграция фронта).
 
 ---
 
@@ -48,6 +48,61 @@
 ### Чистка
 - **Удалён** `components/PlaceCard.vue` — legacy-компонент Bootstrap, не используется ни одним экраном. ResultCard/ArtifactCard полностью покрывают сценарии
 
+### Раунд 4 — Backend дельта + интеграция фронта (2026-05-09)
+
+Большой проход по всему `backend.md`, всем 19 решениям `DESIGN-DECISIONS.md` (тех, что требовали бэк), и приоритетам `NEXT.md`. Закрыто практически всё, что описано чётко.
+
+#### Bk: Несколько фото в review (B1)
+- **Миграция 012**: `review_photos(id, review_id FK CASCADE, url, position, created_at)` + индекс `(review_id, position)`. Backfill: 9 существующих `reviews.image_url` уехали в `position=0`. `image_url` оставлен как backwards-compat и для cover-fallback в `/api/places`.
+- API: `POST /api/places/:id/reviews/:rid/photos` (multipart `photos[]`, до 5 за раз, лимит 5 на отзыв, atomic-rollback при middle-failure), `DELETE /api/places/:id/reviews/:rid/photos/:pid`. Legacy `/image` эндпоинт сохранён, теперь тоже append'ит в стопку.
+- Модель `Review.Photos []ReviewPhoto`. Place расширен `feed_photos` — пул фото по всем отзывам места для стопки в ленте.
+- Frontend: новый `PolaroidStack.vue` (1 фото — одиночка, 2 — внахлёст −2°/+3°, 3+ — стопка из 3-х с каракулевым «+ ещё N»). `ReviewForm` с мульти-слотом и крестиком-удалением. На `PlaceDetail` фото идут горизонтальным скролл-рядом со snap-mandatory.
+- Стек авторов на `ArtifactCard` — до 4-х аватарок 24px внахлёст с белым ободком, 5+ свернуто в каракулевое «+N».
+
+#### Bk: Notes + feed_events (B2)
+- **Миграция 013**: `notes(id, author_id FK, text, place_id?, city?, paper_color?, tape_color?, is_struck, created_at, updated_at)` + индексы. VIEW `feed_events` объединяет `review_added` и `note_added` в одну хронологию (фундамент для будущих типов: wishlist_*, kruzhok_added, gem_found).
+- API: `GET/POST /api/notes`, `PUT/DELETE /api/notes/:id`, `PUT /api/notes/:id/strike`, `GET /api/feed?limit=`, `GET /api/feed/weeks` (агрегаты по неделям, последние 26).
+- Frontend: `NoteSheet.vue` (bottom-sheet создания), `NoteArtifact.vue` (карточка-записка с тейпом, аватаркой автора, хвостиком-ссылкой на место/город). `useFeed` объединяет places + notes в одну хронологию по `_kind`. Tab «Записки» в `Profile`. AddArtifactSheet «записка от руки» — рабочий.
+
+#### Bk: Cities + Users + Gems Hub (B3 + B4)
+- API: `GET /api/cities`, `/cities/:name`, `/cities/:name/places`, `/cities/:name/gems`. `GET /api/users`, `/users/:id`, `/users/:id/places`, `/users/:id/gems`, `/users/:id/cities`. `GET /api/gems` (places + by_city + by_user).
+- Repo `aggregate.go` — все SQL-агрегации в одном файле, читабельны.
+- Frontend: новые экраны `views/CityPage.vue`, `views/PersonPage.vue`, `views/GemsHub.vue`. Все три по одному паттерну: серифа-имя/название, билетик-стата, сегментированные секции (полки), `ResultCard`-листы. Линки в граф навигации:
+  - Полка «По городам» в Найти → `/cities/:name`
+  - Штампик `жемчужина` на `/places/:id` → `/gems`
+  - Штампик города на `/places/:id` → `/cities/:name`
+  - Авторы в `ReviewCard` → `/people/:id`
+  - В `GemsHub` — линки на города и людей.
+
+#### Bk: /api/random + расширенные фильтры (B5)
+- `GET /api/random` с фильтрами `city`, `cuisine_type_id`, `is_gem`, `exclude_visited_by=me|<id>`. 404 если ничего не подошло.
+- В `/api/places` добавлены: `attended_by=1,3,7`, `visit_from=YYYY-MM-DD`, `visit_to=YYYY-MM-DD`, `sort=rating_user:<id>` (сортировка по среднему рейтингу конкретного пользователя, NULLS LAST).
+- Frontend: 🎲 «Мне повезёт» в Найти → серверный `/random?exclude_visited_by=me`, fallback на клиентский рандом если 404. UI для `attended_by/visit_from-to/rating_user` пока не вынесен — это backend-фундамент.
+
+#### Bk: Wishlist общий + триггер struck
+- **Миграция 015**: `wishlists.is_struck` (default false) + `wishlists.struck_at`. Backfill: записи, по которым автор уже оставил review, помечены как зачёркнутые с моментом review.created_at.
+- Триггер: при `POST /api/places/:id/reviews` после создания review для каждого автора-соавтора — `wishlistRepo.MarkStruck(uid, placeID)`. Idempotent. Best-effort: ошибка не фейлит создание отзыва.
+- API: `GET /api/wishlist/all` — общий wishlist круга, каждая запись `{user_id, username, avatar_url, place, is_struck, struck_at, created_at}`. Сортировка: незачёркнутые сверху.
+
+#### Frontend: A1 / A2 / A3 (тюнинги ленты)
+- **A1**: Доска переехала с `flex` на `display: grid; grid-template-columns: repeat(2, 1fr); grid-auto-flow: dense`. Per-bucket выбирается ровно один **featured**-артефакт (приоритет: первая жемчужина → первый place в бакетах ≥5 элементов). У featured: `grid-column: 1 / -1`, billetik без compact, текст и стек авторов крупнее, мягкий tilt −0.6°.
+- **A2**: новый `KruzhokDivider.vue` — full-width row внутри grid'а после каждого места с `has_video=true` (бэк добавил флаг в `/api/places`). Тонкая чернильная линия, кружок видео в центре, рукописная дата справа. Клик ведёт на страницу места с anchor'ом на отзыв-форму.
+- **A3**: билетик-only артефакт. Если у места нет ни `image_url`, ни review-фото, но есть рейтинги/авторы — рендерится бумажная карточка без полароида: серифа-имя, штампики города/жемчужины, билетик, стек авторов в потоке.
+
+#### Frontend: F1 / C1 / C2
+- **F1**: полка «По друзьям» из placeholder'а превратилась в горизонтальную карусель аватарок 60px (фото или цветной инициал, серифа-имя, рукописный count мест). Сортировка по review_count desc. Клик → `/people/:id`.
+- **C1**: onboarding-режим. У пользователя с `places_count===0` на Доске показывается приветственный хинт сверху + soft-CTA «+ новое место» внизу (терракотовая pill). Лента читается read-only. Режим выключается автоматически после первого визита.
+- **C2**: точка-индикатор «новости» на табе Доска. Миграция 014: `users.last_seen_feed_at`. API: `GET /api/feed/unread-count` (исключает свои события), `POST /api/feed/seen`. Фронт: `useFeedStore` poll'ит каждые 60s + при focus вкладки. Сбрасывается при открытии Доски.
+
+### Контроль качества раунда 4
+- `go build / go test` — все пакеты зелёные.
+- `eslint` — чисто, кроме 3 pre-existing warnings в `LocationPicker.vue`.
+- `vite build` — 3.07s, без warnings.
+- Все 5 миграций (012, 013, 014, 015) применились на работающей БД, backfill проверен.
+- 19 новых эндпоинтов зарегистрированы (401 без токена — корректно).
+
+
+
 ### Визуальная проверка
 - Headless Chrome скриншоты `/login` (wordmark, карточка с лёгким наклоном, форма с paper-control полями, терракотовая CTA, рукописный хинт) и `/invite/zzznotexist` (штамп «недействительно», bad-state с CTA «← к входу») — вёрстка консистентная с дизайном
 - Console-проверка: ноль JS-ошибок (только безвредный Vite HMR fallback notice и матчи на `--bs-warning` CSS-переменную)
@@ -81,28 +136,36 @@
 
 ---
 
-## Отложено — нужен бэкенд
+## Закрыто в раунде 4 — было «отложено — нужен бэкенд»
 
-Все эти экраны и фичи описаны в `product.md`/`mvp-scope.md`. Без бэк-дельты сейчас не реализуемы. Зависимости — в `backend.md`.
-
-| Фича / экран | Что нужно на бэке | Где описано |
+| Фича / экран | Закрыто | Комментарий |
 |---|---|---|
-| **Записки от руки** в ленте | таблица `notes`, `/api/notes`, тип `note_added` в feed | backend.md §notes |
-| **Wishlist на доске + перечёркивание** | `GET /api/wishlist/all`, триггер `is_struck=true` | backend.md §Wishlist |
-| **Лента с feed_events** (review/note/wishlist/gem-found/kruzhok) | `feed_events` (VIEW или таблица), `GET /api/feed`, `GET /api/feed/weeks` | backend.md §feed_events |
-| **Видеосообщение без визита** | новая сущность вне `reviews` | product.md §Открытые вопросы |
-| **Несколько фото в review** | таблица `review_photos` | backend.md §Reviews — MVP-критично для скрапбук-галереи |
-| **Page «Город» `/cities/:name`** | `GET /api/cities`, `GET /api/cities/:name`, `…/places`, `…/gems` | backend.md §Города |
-| **Профиль друга `/people/:id`** | `GET /api/users/:id`, `…/places`, `…/gems`, `…/cities` | backend.md §Друзья |
-| **Hub Жемчужины `/gems`** | `GET /api/gems` (с агрегатами) | backend.md §Жемчужины |
-| **🎲 «Мне повезёт» серверный** (с `exclude_visited_by`) | `GET /api/random` | backend.md §Случайное (сейчас работает только клиентский — рандом из текущих результатов) |
-| **Полка «По друзьям» в Найти** | `GET /api/users/:id` + аватарка + count | backend.md §Друзья (placeholder со «скоро» уже стоит) |
-| **Сортировка по рейтингу конкретного человека** | `sort=rating_user:<id>` в `/api/places` | backend.md §/api/places |
-| **Фильтр «кто был» / дата визита** | `attended_by`, `visit_from/to` в `/api/places` | backend.md §/api/places |
-| **Расширенный `/api/places/:id`** | `gem_status`, `attendance`, `rating_avg`, `ratings_per_user` | backend.md §Карточка места |
-| **Стата «X городов» в профиле точная** | `GET /api/users/:id/cities` | backend.md §Друзья (сейчас считаем приближённо через wishlist пересечение) |
-| **Карта — рестайл маркеров** | фронт-only, отдельный задача в Раунде 3 | product.md §Карта |
-| **Анимации сверх gem-gleam** | после feed_events | mvp-scope §Сроки 7 |
+| Записки от руки в ленте | ✅ | notes table + /api/notes + интеграция в useFeed |
+| Wishlist общий + перечёркивание | ✅ (бэк) | /api/wishlist/all + struck триггер. Frontend-UI ждёт решения дизайнера (см. OPEN-QUESTIONS §1) |
+| Лента с feed_events | ✅ | VIEW + /api/feed + /api/feed/weeks |
+| Несколько фото в review | ✅ | review_photos + PolaroidStack + multi-slot ReviewForm |
+| Page «Город» /cities/:name | ✅ | новый экран + полные агрегаты |
+| Профиль друга /people/:id | ✅ | новый экран + линки с AuthorTag |
+| Hub Жемчужины /gems | ✅ | новый экран + линки с штампиков |
+| 🎲 «Мне повезёт» серверный | ✅ | /api/random с exclude_visited_by |
+| Полка «По друзьям» в Найти | ✅ | карусель аватарок 60px |
+| Сортировка по рейтингу конкретного человека | ✅ (бэк) | sort=rating_user:&lt;id&gt;. UI в filter-drawer ещё не вынесен |
+| Фильтр «кто был» / дата визита | ✅ (бэк) | attended_by, visit_from/to. UI в filter-drawer ещё не вынесен |
+| Стата «X городов» в профиле точная | ✅ | /api/users/:id/cities |
+
+## Висит — нужны решения дизайнера
+
+См. **`spec/OPEN-QUESTIONS.md`** для коротких конкретных вопросов с моими рекомендациями.
+
+| Фича | Где описано | Что неясно |
+|---|---|---|
+| Расширенный `/api/places/:id` | backend.md §Карточка места | Структура есть, но не понятно где и как показывать `attendance.visit_count`, `ratings_per_user` в UI |
+| Wishlist на Доске | DESIGN-DECISIONS / mvp-scope | Как рендерить «план» в ленте — отдельным артефактом или модификатор `Note`? |
+| L1 edge case — два визита одного человека в разные дни | DESIGN-DECISIONS L1 | Сейчас группируем только по place_id. Через feed_events можно по (place, date, attendees) |
+| C3 шаринг наружу `/p/:id` + OG-теги | NEXT.md C3 | Архитектурный выбор: SSR (Nuxt) / Go-template endpoint / скип |
+| Тёмная тема | DESIGN-DECISIONS G2 | Явный «next», но потом — как переводим скрапбук? |
+| Видеосообщение без визита | product.md | Отдельный класс артефакта или часть review (как сейчас)? |
+| Анимации сверх gem-gleam | mvp-scope | Какие именно? |
 
 ---
 

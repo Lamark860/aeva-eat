@@ -68,6 +68,7 @@ function formatBucketLabel(bucket) {
 
 export function useFeed() {
   const places = ref([])
+  const notes = ref([])
   const loading = ref(false)
   const error = ref(null)
 
@@ -75,38 +76,59 @@ export function useFeed() {
     loading.value = true
     error.value = null
     try {
-      // Pull a generous slice; backend sort=new orders by created_at desc.
-      const { data } = await http.get('/places', { params: { sort: 'new', limit: 60 } })
-      places.value = data.places || []
+      // Параллельно: места (для артефактов с фото/билетиком) и записки.
+      // sort=new для places — мест по created_at desc; notes уже отдаются
+      // в порядке свежие сверху.
+      const [placesRes, notesRes] = await Promise.allSettled([
+        http.get('/places', { params: { sort: 'new', limit: 60 } }),
+        http.get('/notes'),
+      ])
+      places.value = placesRes.status === 'fulfilled' ? (placesRes.value.data.places || []) : []
+      notes.value  = notesRes.status  === 'fulfilled' ? (notesRes.value.data || []) : []
     } catch (e) {
       error.value = e
       places.value = []
+      notes.value = []
     } finally {
       loading.value = false
     }
   }
 
-  // Group places into buckets (current week + collapsed older).
+  // Объединяем places + notes в одну хронологию артефактов. Каждый item
+  // получает _kind ('place' | 'note') — Home рендерит соответствующий
+  // компонент. Сортировка по _date desc.
+  const items = computed(() => {
+    const out = []
+    for (const p of places.value) {
+      out.push({ _kind: 'place', _date: new Date(p.created_at || p.updated_at || Date.now()), ...p })
+    }
+    for (const n of notes.value) {
+      out.push({ _kind: 'note', _date: new Date(n.created_at), id: `note-${n.id}`, _note: n })
+    }
+    out.sort((a, b) => b._date - a._date)
+    return out
+  })
+
   const buckets = computed(() => {
-    if (!places.value.length) return { current: null, older: [] }
+    const list = items.value
+    if (!list.length) return { current: null, older: [] }
     const now = new Date()
     const thisWeekStart = weekStart(now)
 
     const current = { label: formatWeekRange(thisWeekStart), start: thisWeekStart, items: [] }
     const olderMap = new Map()
 
-    for (const p of places.value) {
-      const date = new Date(p.created_at || p.updated_at || Date.now())
-      const ws = weekStart(date)
+    for (const it of list) {
+      const ws = weekStart(it._date)
       if (ws.getTime() === thisWeekStart.getTime()) {
-        current.items.push({ ...p, _date: date })
+        current.items.push(it)
         continue
       }
       const b = bucketKey(ws, now)
       if (!olderMap.has(b.key)) {
         olderMap.set(b.key, { ...b, label: formatBucketLabel(b), items: [] })
       }
-      olderMap.get(b.key).items.push({ ...p, _date: date })
+      olderMap.get(b.key).items.push(it)
     }
 
     const older = Array.from(olderMap.values()).sort((a, b) => {
@@ -120,6 +142,7 @@ export function useFeed() {
 
   return {
     places,
+    notes,
     loading,
     error,
     buckets,

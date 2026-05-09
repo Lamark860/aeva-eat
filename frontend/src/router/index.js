@@ -60,6 +60,24 @@ const routes = [
     name: 'Invites',
     component: () => import('../views/Invites.vue'),
     meta: { requiresAuth: true, scrapbook: true }
+  },
+  {
+    path: '/cities/:name',
+    name: 'CityPage',
+    component: () => import('../views/CityPage.vue'),
+    meta: { requiresAuth: true, scrapbook: true }
+  },
+  {
+    path: '/people/:id',
+    name: 'PersonPage',
+    component: () => import('../views/PersonPage.vue'),
+    meta: { requiresAuth: true, scrapbook: true }
+  },
+  {
+    path: '/gems',
+    name: 'GemsHub',
+    component: () => import('../views/GemsHub.vue'),
+    meta: { requiresAuth: true, scrapbook: true }
   }
 ]
 

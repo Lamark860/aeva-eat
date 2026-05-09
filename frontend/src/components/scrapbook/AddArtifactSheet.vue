@@ -13,10 +13,10 @@
               <span class="hint">фото · оценки · видео</span>
             </button>
 
-            <button class="item disabled" type="button" disabled>
+            <button class="item" type="button" @click="pick('note')">
               <span class="glyph">✎</span>
               <span class="label">записка от руки</span>
-              <span class="hint">скоро</span>
+              <span class="hint">короткий текст · бумага · тейп</span>
             </button>
 
             <button class="item disabled" type="button" disabled>

@@ -88,7 +88,7 @@
       <section v-if="topGems.length" class="shelf">
         <div class="shelf-head">
           <h3>Жемчужины</h3>
-          <button class="shelf-all" @click="placesStore.filters.is_gem = true; fetchFiltered()">все →</button>
+          <router-link to="/gems" class="shelf-all">все →</router-link>
         </div>
         <div class="shelf-row gems">
           <router-link
@@ -121,10 +121,10 @@
         </div>
         <ul class="city-list">
           <li v-for="c in cityShelf" :key="c.name">
-            <button class="city-row" @click="filterByCity(c.name)">
+            <router-link :to="`/cities/${encodeURIComponent(c.name)}`" class="city-row">
               <span class="city-name">{{ c.name }}</span>
               <span class="city-count">{{ c.count }}</span>
-            </button>
+            </router-link>
           </li>
         </ul>
       </section>
@@ -147,11 +147,29 @@
         </div>
       </section>
 
-      <!-- friends shelf — placeholder, awaits backend -->
-      <section class="shelf shelf-stub">
+      <!-- По друзьям — горизонтальная карусель аватарок 60px (DESIGN-DECISIONS §F1) -->
+      <section v-if="friends.length" class="shelf">
         <div class="shelf-head">
           <h3>По друзьям</h3>
-          <span class="shelf-soon">скоро</span>
+        </div>
+        <div class="shelf-row friends">
+          <router-link
+            v-for="u in friends"
+            :key="u.id"
+            :to="`/people/${u.id}`"
+            class="friend-tile"
+          >
+            <span
+              class="r-tag sb-author-tag friend-avatar"
+              :class="[authorColor(u.id), { 'has-photo': !!u.avatar_url }]"
+              :title="u.username"
+            >
+              <img v-if="u.avatar_url" :src="u.avatar_url" alt="" class="r-ph" />
+              <template v-else>{{ (u.username || '?').slice(0, 1).toUpperCase() }}</template>
+            </span>
+            <span class="friend-name">{{ u.username }}</span>
+            <span class="friend-count">{{ u.place_count }}</span>
+          </router-link>
         </div>
       </section>
     </template>
@@ -267,6 +285,7 @@ import Stamp from '../components/scrapbook/Stamp.vue'
 import GemBadge from '../components/scrapbook/GemBadge.vue'
 import ResultCard from '../components/scrapbook/ResultCard.vue'
 import http from '../api/http'
+import { authorColor } from '../composables/useFeed'
 
 const route = useRoute()
 const router = useRouter()
@@ -275,6 +294,10 @@ const catalogs = useCatalogsStore()
 const auth = useAuthStore()
 
 const cities = ref([])
+// Список друзей круга для полки «По друзьям» (DESIGN-DECISIONS §F1).
+// Сортировка по review_count desc — сверху самые активные. Своего профиля
+// не исключаем сознательно: видеть себя в полке полезно.
+const friends = ref([])
 
 const activeFilterCount = computed(() => {
   const f = placesStore.filters
@@ -339,10 +362,6 @@ function clearSearch() {
   fetchFiltered()
 }
 
-function filterByCity(name) {
-  placesStore.filters.city = name
-  fetchFiltered()
-}
 function filterByCuisine(id) {
   const arr = placesStore.filters.cuisine_type_ids || []
   if (!arr.includes(id)) {
@@ -351,7 +370,27 @@ function filterByCuisine(id) {
   fetchFiltered()
 }
 
-function rollDice() {
+async function rollDice() {
+  // B5 — серверный /api/random с теми же фильтрами + exclude_visited_by=me.
+  // На сервере без подходящих 404 → fallback на клиентский рандом из текущей
+  // выдачи (чтобы кнопка не висела в пустой ленте).
+  const params = {}
+  const f = placesStore.filters
+  if (f.city) params.city = f.city
+  if (f.cuisine_type_ids?.length) params.cuisine_type_id = f.cuisine_type_ids.join(',')
+  if (f.is_gem) params.is_gem = 'true'
+  params.exclude_visited_by = 'me'
+  try {
+    const { data } = await http.get('/random', { params })
+    if (data?.id) {
+      router.push(`/places/${data.id}`)
+      return
+    }
+  } catch (_) {
+    // 404 / network error → fallback ниже. Сознательно глушим — кнопка
+    // должна работать даже когда сервер ещё не подкрутили.
+  }
+  // Fallback — клиентский рандом из текущего списка (без exclude_visited_by).
   const list = placesStore.places
   if (!list.length) return
   const p = list[Math.floor(Math.random() * list.length)]
@@ -422,10 +461,18 @@ async function fetchCities() {
   } catch { /* ignore */ }
 }
 
+async function fetchFriends() {
+  try {
+    const { data } = await http.get('/users')
+    friends.value = (data || []).filter(u => u.review_count > 0)
+  } catch { /* ignore */ }
+}
+
 onMounted(async () => {
   loadFiltersFromURL()
   await catalogs.fetchAll()
   await fetchCities()
+  await fetchFriends()
   await placesStore.fetchPlaces()
 })
 </script>
@@ -687,6 +734,8 @@ onMounted(async () => {
   font-family: var(--sb-serif);
   cursor: pointer;
   text-align: left;
+  text-decoration: none;
+  color: inherit;
 
   &:hover .city-name { color: var(--sb-terracotta); }
 }
@@ -718,9 +767,46 @@ onMounted(async () => {
 :deep(.sb-stamp.clickable) { cursor: pointer; }
 :deep(.sb-stamp.clickable:hover) { background: oklch(0.92 0.05 145 / 0.4); }
 
-.shelf-stub {
-  opacity: 0.55;
+/* Friends shelf — горизонтальная карусель аватарок (DESIGN-DECISIONS §F1).
+   60px кружок, имя серифой и count рукописным под ним. */
+.shelf-row.friends {
+  gap: 18px;
+  padding: 10px 4px 14px;
 }
+.friend-tile {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  text-decoration: none;
+  color: inherit;
+  width: 76px;
+}
+.friend-avatar {
+  position: relative;
+  width: 60px;
+  height: 60px;
+  font-size: 22px;
+  box-shadow: 0 0 0 2px #fdfcf7, 0 2px 6px rgba(40, 30, 20, 0.18);
+}
+.friend-avatar.has-photo { background: #fdfcf7; overflow: hidden; }
+.friend-avatar .r-ph { display: block; width: 100%; height: 100%; object-fit: cover; }
+.friend-name {
+  font-family: var(--sb-serif);
+  font-size: 13px;
+  color: var(--sb-ink);
+  text-align: center;
+  word-break: break-word;
+  line-height: 1.1;
+}
+.friend-count {
+  font-family: var(--sb-hand);
+  font-size: 14px;
+  color: var(--sb-ink-mute);
+  line-height: 1;
+}
+.friend-tile:hover .friend-name { color: var(--sb-terracotta); }
 
 .find-results {
   margin-top: 4px;

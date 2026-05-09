@@ -10,16 +10,20 @@
     >
       <span class="glyph" aria-hidden="true">{{ t.glyph }}</span>
       <span class="lbl">{{ t.label }}</span>
+      <!-- C2 — точка-индикатор «есть новое в ленте» на табе Доска. -->
+      <span v-if="t.to === '/' && feed.unread > 0" class="dot" aria-hidden="true"></span>
     </router-link>
   </nav>
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, watch, onMounted, onUnmounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
+import { useFeedStore } from '../stores/feed'
 
 const auth = useAuthStore()
+const feed = useFeedStore()
 const route = useRoute()
 
 // Glyphs lifted from spec/example/v2 — Caveat-rendered to match scrapbook hand.
@@ -32,6 +36,20 @@ const tabs = [
 
 const currentPath = computed(() => route.path)
 function isActive(t) { return t.match(currentPath.value) }
+
+// Запускаем polling индикатора, когда юзер аутентифицирован.
+watch(() => auth.isAuthenticated, (yes) => {
+  if (yes) feed.start()
+  else feed.stop()
+}, { immediate: true })
+
+// При открытии Доски сбрасываем точку (markSeen на сервере).
+watch(currentPath, (p) => {
+  if (p === '/') feed.markSeen()
+}, { immediate: true })
+
+onMounted(() => { if (auth.isAuthenticated) feed.start() })
+onUnmounted(() => feed.stop())
 </script>
 
 <style scoped lang="scss">
@@ -50,5 +68,20 @@ function isActive(t) { return t.match(currentPath.value) }
   letter-spacing: 0.04em;
   line-height: 1.1;
   text-transform: lowercase;
+}
+
+/* C2 — небольшая точка-индикатор «новости» рядом с глифом таба. */
+.sb-tabbar .tab {
+  position: relative;
+}
+.sb-tabbar .tab .dot {
+  position: absolute;
+  top: 6px;
+  right: calc(50% - 16px);
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--sb-terracotta);
+  box-shadow: 0 0 0 2px #fdfcf7;
 }
 </style>

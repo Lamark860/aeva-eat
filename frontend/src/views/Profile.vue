@@ -133,6 +133,47 @@
       </div>
     </section>
 
+    <!-- Notes -->
+    <section v-if="activeTab === 'notes'" class="me-section">
+      <div class="sb-section-head" style="padding: 0 0 8px">
+        <h2>Записки</h2>
+        <span class="sub">мои бумажки на доске</span>
+      </div>
+
+      <button v-if="!noteFormOpenInline" class="add-link" @click="noteFormOpenInline = true">
+        + новая записка
+      </button>
+
+      <form v-else class="custom-add" @submit.prevent="onCreateNote">
+        <textarea
+          v-model="newNoteText"
+          class="form-control"
+          rows="3"
+          placeholder="что прикнопить?"
+          required
+        ></textarea>
+        <div class="settings-row" style="margin-top: 8px">
+          <button type="submit" class="btn-apply" :disabled="!newNoteText.trim()">прикнопить</button>
+          <button type="button" class="reset-btn" @click="noteFormOpenInline = false">отмена</button>
+        </div>
+      </form>
+
+      <div v-if="notesStore.myNotes.length === 0" class="sb-empty" style="padding: 24px 12px">
+        пока ни одной записки
+      </div>
+
+      <div v-else class="custom-notes" style="margin-top: 18px">
+        <div
+          v-for="(n, i) in notesStore.myNotes"
+          :key="n.id"
+          class="custom-note"
+          :class="customTilt(i)"
+        >
+          <NoteArtifact :note="n" can-edit @delete="onDeleteMyNote" />
+        </div>
+      </div>
+    </section>
+
     <!-- Settings -->
     <section v-if="activeTab === 'settings'" class="me-section">
       <div class="settings-card">
@@ -175,13 +216,40 @@ import Note from '../components/scrapbook/Note.vue'
 import Tape from '../components/scrapbook/Tape.vue'
 import Ticket from '../components/scrapbook/Ticket.vue'
 import ResultCard from '../components/scrapbook/ResultCard.vue'
+import NoteArtifact from '../components/scrapbook/NoteArtifact.vue'
+import { useNotesStore } from '../stores/notes'
 import http from '../api/http'
 
 const router = useRouter()
 const auth = useAuthStore()
 const reviewsStore = useReviewsStore()
 const wishlist = useWishlistStore()
+const notesStore = useNotesStore()
 const toast = useToast()
+
+const noteFormOpenInline = ref(false)
+const newNoteText = ref('')
+
+async function onCreateNote() {
+  try {
+    await notesStore.create({ text: newNoteText.value.trim() })
+    newNoteText.value = ''
+    noteFormOpenInline.value = false
+    toast.success('Записка прикноплена')
+  } catch (e) {
+    toast.error(e.response?.data?.error || 'Не удалось сохранить')
+  }
+}
+
+async function onDeleteMyNote(id) {
+  if (!confirm('Удалить записку?')) return
+  try {
+    await notesStore.remove(id)
+    toast.info('Записка убрана')
+  } catch (e) {
+    toast.error(e.response?.data?.error || 'Не удалось удалить')
+  }
+}
 
 const customName = ref('')
 const customNote = ref('')
@@ -192,6 +260,7 @@ const activeTab = ref('visits')
 const tabs = [
   { key: 'visits',   label: 'Визиты' },
   { key: 'wishlist', label: 'Wishlist' },
+  { key: 'notes',    label: 'Записки' },
   { key: 'settings', label: 'Настройки' },
 ]
 
@@ -256,15 +325,22 @@ const displayedReviews = computed(() => {
 })
 
 async function handleUpdateReview(data) {
-  const photoFile = data._photoFile
-  const videoFile = data._videoFile
-  delete data._photoFile
+  const newPhotoFiles   = data._newPhotoFiles || []
+  const removedPhotoIds = data._removedPhotoIds || []
+  const videoFile       = data._videoFile
+  delete data._newPhotoFiles
+  delete data._removedPhotoIds
   delete data._videoFile
   const placeId = editingReview.value.place_id
   const reviewId = editingReview.value.id
   try {
     await reviewsStore.updateReview(placeId, reviewId, data)
-    if (photoFile) await reviewsStore.uploadReviewImage(placeId, reviewId, photoFile)
+    for (const pid of removedPhotoIds) {
+      await reviewsStore.deleteReviewPhoto(placeId, reviewId, pid)
+    }
+    if (newPhotoFiles.length > 0) {
+      await reviewsStore.uploadReviewPhotos(placeId, reviewId, newPhotoFiles)
+    }
     if (videoFile) await reviewsStore.uploadReviewVideo(placeId, reviewId, videoFile)
     editingReview.value = null
     toast.success('Отзыв обновлён')
@@ -325,6 +401,7 @@ onMounted(() => {
     reviewsStore.fetchByUser(auth.user.id)
     wishlist.fetchPlaces()
     wishlist.fetchCustom()
+    notesStore.fetchByAuthor(auth.user.id)
   }
 })
 </script>
