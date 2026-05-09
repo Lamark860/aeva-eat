@@ -1,158 +1,183 @@
 <template>
-  <div>
-    <h2 class="mb-4">Мой профиль</h2>
+  <div class="sb-paper sb-grain sb-screen me">
+    <header class="me-header">
+      <div class="avatar-wrap" @click="$refs.avatarInput.click()">
+        <img v-if="auth.user?.avatar_url" :src="auth.user.avatar_url" class="avatar-img" alt="" />
+        <div v-else class="avatar-placeholder">{{ initial }}</div>
+        <div class="avatar-overlay">фото</div>
+        <input ref="avatarInput" type="file" accept="image/*" hidden @change="onAvatarChange" />
+      </div>
 
-    <div v-if="auth.user" class="card mb-4">
-      <div class="card-body">
-        <div class="d-flex align-items-center gap-3 mb-3">
-          <div class="avatar-wrap" @click="$refs.avatarInput.click()">
-            <img v-if="auth.user.avatar_url" :src="auth.user.avatar_url" class="avatar-img" />
-            <div v-else class="avatar-placeholder">{{ auth.user.username?.charAt(0).toUpperCase() }}</div>
-            <div class="avatar-overlay">📷</div>
-            <input ref="avatarInput" type="file" accept="image/*" hidden @change="onAvatarChange" />
-          </div>
-          <div>
-            <h5 class="mb-0">{{ auth.user.username }}</h5>
-            <small class="text-muted">Зарегистрирован: {{ new Date(auth.user.created_at).toLocaleDateString('ru') }}</small>
-          </div>
+      <div class="me-name">{{ auth.user?.username || '—' }}</div>
+      <div v-if="auth.user?.created_at" class="me-since">
+        в кругу с&nbsp;{{ formatJoinDate(auth.user.created_at) }}
+      </div>
+
+      <!-- Stats ticket -->
+      <div class="me-stats sb-t-l1">
+        <Ticket
+          :food="stats.places"
+          :service="stats.gems"
+          :vibe="stats.cities"
+          :labels="['мест', 'жемчужин', 'городов']"
+        />
+      </div>
+    </header>
+
+    <!-- Tabs -->
+    <nav class="me-tabs">
+      <button
+        v-for="t in tabs"
+        :key="t.key"
+        class="me-tab"
+        :class="{ active: activeTab === t.key }"
+        @click="activeTab = t.key"
+      >
+{{ t.label }}
+</button>
+    </nav>
+
+    <!-- Visits -->
+    <section v-if="activeTab === 'visits'" class="me-section">
+      <div v-if="reviewsStore.loading" class="sb-empty">…</div>
+      <div v-else-if="reviewsStore.reviews.length === 0" class="sb-empty">
+        <div>пусто</div>
+        <div style="margin-top: 8px">прикнопь первый визит —</div>
+        <div style="margin-top: 12px">
+          <router-link to="/places/new" class="add-link">+ добавить место</router-link>
         </div>
+      </div>
+      <div v-else>
+        <ReviewForm
+          v-if="editingReview"
+          :place-id="editingReview.place_id"
+          :review="editingReview"
+          @submitted="handleUpdateReview"
+          @cancel="editingReview = null"
+        />
 
-        <!-- Смена пароля -->
-        <button class="btn btn-sm btn-outline-secondary" @click="showPasswordForm = !showPasswordForm">
-          {{ showPasswordForm ? 'Отмена' : '🔒 Сменить пароль' }}
-        </button>
-        <form v-if="showPasswordForm" class="mt-3" @submit.prevent="onChangePassword" style="max-width: 360px;">
-          <div class="mb-2">
-            <input v-model="pwForm.old_password" type="password" class="form-control form-control-sm" placeholder="Текущий пароль" required />
-          </div>
-          <div class="mb-2">
-            <input v-model="pwForm.new_password" type="password" class="form-control form-control-sm" placeholder="Новый пароль (мин. 6 символов)" required minlength="6" />
-          </div>
-          <button type="submit" class="btn btn-primary btn-sm" :disabled="pwLoading">
-            {{ pwLoading ? 'Сохранение...' : 'Сохранить' }}
+        <ReviewCard
+          v-for="rv in displayedReviews"
+          :key="rv.id"
+          :review="rv"
+          can-edit
+          show-place
+          @edit="editingReview = rv"
+          @delete="(id) => handleDeleteReview(rv)"
+        />
+
+        <div v-if="reviewsStore.reviews.length > 5" class="me-more">
+          <button class="more-link" @click="reviewsExpanded = !reviewsExpanded">
+            {{ reviewsExpanded ? '↑ свернуть' : `↓ ещё ${reviewsStore.reviews.length - 5}` }}
           </button>
-        </form>
-      </div>
-    </div>
-
-    <h4 class="mb-3">Мои отзывы <span v-if="reviewsStore.reviews.length" class="text-muted fs-6">({{ reviewsStore.reviews.length }})</span></h4>
-
-    <div v-if="reviewsStore.loading" class="text-center py-3">
-      <div class="spinner-border spinner-border-sm"></div>
-    </div>
-
-    <div v-else-if="reviewsStore.reviews.length === 0" class="text-muted text-center py-3">
-      У вас пока нет отзывов.
-    </div>
-
-    <div v-else>
-      <button class="btn btn-sm btn-outline-secondary mb-3" @click="reviewsExpanded = !reviewsExpanded">
-        {{ reviewsExpanded ? 'Свернуть' : 'Показать все' }}
-      </button>
-
-      <!-- Inline edit form -->
-      <ReviewForm
-        v-if="editingReview"
-        :place-id="editingReview.place_id"
-        :review="editingReview"
-        @submitted="handleUpdateReview"
-        @cancel="editingReview = null"
-      />
-
-      <div v-for="rv in displayedReviews" :key="rv.id" class="card mb-3">
-        <div v-if="rv.image_url" class="review-img-wrap-sm">
-          <img :src="rv.image_url" class="review-img-sm" />
-        </div>
-        <div class="card-body">
-          <div class="d-flex justify-content-between align-items-start">
-            <div>
-              <router-link :to="`/places/${rv.place_id}`" class="fw-bold text-decoration-none">
-                {{ rv.place_name || `Заведение #${rv.place_id}` }}
-              </router-link>
-              <span v-if="rv.visited_at" class="text-muted ms-2">· {{ formatDate(rv.visited_at) }}</span>
-            </div>
-            <div class="d-flex gap-2 align-items-center">
-              <span class="badge bg-warning text-dark">🍴 {{ rv.food_rating }}</span>
-              <span class="badge bg-info text-dark">🤝 {{ rv.service_rating }}</span>
-              <span class="badge bg-success">✨ {{ rv.vibe_rating }}</span>
-              <span v-if="rv.is_gem" class="badge bg-primary">💎</span>
-              <button class="btn btn-outline-primary btn-sm ms-1" @click="editingReview = rv" title="Редактировать">✏️</button>
-              <button class="btn btn-outline-danger btn-sm" @click="handleDeleteReview(rv)" title="Удалить">🗑</button>
-            </div>
-          </div>
-          <p v-if="rv.comment" class="mb-0 mt-2 text-muted">{{ rv.comment }}</p>
-          <div v-if="rv.video_url" class="mt-2">
-            <div class="video-circle-profile">
-              <video :src="rv.video_url" class="video-preview-profile" playsinline loop muted preload="metadata" @click="toggleVideo($event)"></video>
-            </div>
-          </div>
         </div>
       </div>
-    </div>
+    </section>
 
     <!-- Wishlist -->
-    <h4 class="mt-4 mb-3">Хочу посетить</h4>
-
-    <div v-if="wishlist.loading" class="text-center py-3">
-      <div class="spinner-border spinner-border-sm"></div>
-    </div>
-
-    <div v-else-if="wishlist.wishlistPlaces.length === 0" class="text-muted text-center py-3">
-      Пока ничего не запланировано. Нажмите 🤍 на карточке заведения.
-    </div>
-
-    <div v-else class="row g-3 mb-4">
-      <div v-for="place in wishlist.wishlistPlaces" :key="place.id" class="col-12 col-md-6 col-lg-4">
-        <PlaceCard :place="place" />
+    <section v-if="activeTab === 'wishlist'" class="me-section">
+      <div class="sb-section-head" style="padding: 0 0 8px">
+        <h2>Из круга</h2>
+        <span class="sub">места из системы</span>
       </div>
-    </div>
 
-    <!-- Custom wishlist -->
-    <h4 class="mt-4 mb-3">Ещё хочется попробовать</h4>
+      <div v-if="wishlist.loading" class="sb-empty">…</div>
+      <div v-else-if="wishlist.wishlistPlaces.length === 0" class="sb-empty">
+        <div>ничего не запланировано</div>
+        <div style="margin-top: 6px">тапни ♥ на любой карточке —</div>
+      </div>
+      <div v-else class="results-list">
+        <ResultCard v-for="p in wishlist.wishlistPlaces" :key="p.id" :place="p" />
+      </div>
 
-    <form @submit.prevent="onAddCustom" class="d-flex gap-2 mb-3">
-      <input
-        v-model="customName"
-        type="text"
-        class="form-control form-control-sm"
-        placeholder="Название заведения..."
-        required
-      />
-      <input
-        v-model="customNote"
-        type="text"
-        class="form-control form-control-sm"
-        placeholder="Заметка (опционально)"
-      />
-      <button type="submit" class="btn btn-primary btn-sm text-nowrap" :disabled="!customName.trim()">+ Добавить</button>
-    </form>
+      <div class="sb-section-head" style="padding: 18px 0 8px">
+        <h2>Своё</h2>
+        <span class="sub">записки от руки</span>
+      </div>
 
-    <div v-if="wishlist.customItems.length === 0" class="text-muted text-center py-3">
-      Здесь можно записать заведения, которые хотите посетить, но их ещё нет в системе.
-    </div>
+      <form @submit.prevent="onAddCustom" class="custom-add">
+        <input
+          v-model="customName"
+          type="text"
+          class="form-control"
+          placeholder="место (название)"
+          required
+        />
+        <input
+          v-model="customNote"
+          type="text"
+          class="form-control"
+          placeholder="заметка (опционально)"
+        />
+        <button type="submit" class="add-link" :disabled="!customName.trim()">+ записать</button>
+      </form>
 
-    <div v-else class="list-group mb-4">
-      <div v-for="item in wishlist.customItems" :key="item.id" class="list-group-item d-flex justify-content-between align-items-center">
-        <div>
-          <strong>{{ item.name }}</strong>
-          <small v-if="item.note" class="text-muted ms-2">— {{ item.note }}</small>
+      <div v-if="wishlist.customItems.length === 0" class="sb-empty" style="padding: 24px 12px">
+        здесь можно записать места, которых ещё нет в системе
+      </div>
+
+      <div v-else class="custom-notes">
+        <div
+          v-for="(item, i) in wishlist.customItems"
+          :key="item.id"
+          class="custom-note"
+          :class="customTilt(i)"
+        >
+          <Note lined>
+            <div class="note-name">{{ item.name }}</div>
+            <div v-if="item.note" class="note-text">{{ item.note }}</div>
+          </Note>
+          <Tape :variant="customTape(i)" :style="customTapeStyle(i)" />
+          <button class="note-remove" type="button" @click="onDeleteCustom(item.id)" aria-label="Удалить">×</button>
         </div>
-        <button class="btn btn-outline-danger btn-sm" @click="onDeleteCustom(item.id)" title="Удалить">✕</button>
       </div>
-    </div>
+    </section>
+
+    <!-- Settings -->
+    <section v-if="activeTab === 'settings'" class="me-section">
+      <div class="settings-card">
+        <h3 class="settings-h">Пароль</h3>
+        <button v-if="!showPasswordForm" class="add-link" @click="showPasswordForm = true">сменить пароль</button>
+        <form v-else class="settings-form" @submit.prevent="onChangePassword">
+          <input v-model="pwForm.old_password" type="password" class="form-control" placeholder="текущий пароль" required />
+          <input v-model="pwForm.new_password" type="password" class="form-control" placeholder="новый пароль (мин. 6)" required minlength="6" />
+          <div class="settings-row">
+            <button type="submit" class="btn-apply" :disabled="pwLoading">
+              {{ pwLoading ? '…' : 'сохранить' }}
+            </button>
+            <button type="button" class="reset-btn" @click="showPasswordForm = false">отмена</button>
+          </div>
+        </form>
+      </div>
+
+      <div class="settings-card">
+        <h3 class="settings-h">Инвайты</h3>
+        <router-link to="/invites" class="add-link">пригласить друга →</router-link>
+      </div>
+
+      <div class="settings-card">
+        <button class="danger-link" @click="logout">выйти</button>
+      </div>
+    </section>
   </div>
 </template>
 
 <script setup>
 import { onMounted, ref, computed } from 'vue'
+import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import { useReviewsStore } from '../stores/reviews'
 import { useWishlistStore } from '../stores/wishlist'
 import { useToast } from '../composables/useToast'
-import PlaceCard from '../components/PlaceCard.vue'
 import ReviewForm from '../components/ReviewForm.vue'
+import ReviewCard from '../components/ReviewCard.vue'
+import Note from '../components/scrapbook/Note.vue'
+import Tape from '../components/scrapbook/Tape.vue'
+import Ticket from '../components/scrapbook/Ticket.vue'
+import ResultCard from '../components/scrapbook/ResultCard.vue'
 import http from '../api/http'
 
+const router = useRouter()
 const auth = useAuthStore()
 const reviewsStore = useReviewsStore()
 const wishlist = useWishlistStore()
@@ -162,6 +187,30 @@ const customName = ref('')
 const customNote = ref('')
 const reviewsExpanded = ref(false)
 const editingReview = ref(null)
+
+const activeTab = ref('visits')
+const tabs = [
+  { key: 'visits',   label: 'Визиты' },
+  { key: 'wishlist', label: 'Wishlist' },
+  { key: 'settings', label: 'Настройки' },
+]
+
+const initial = computed(() => (auth.user?.username || '?').slice(0, 1).toUpperCase())
+
+const stats = computed(() => {
+  const placeIds = new Set()
+  let gems = 0
+  for (const rv of reviewsStore.reviews) {
+    placeIds.add(rv.place_id)
+    if (rv.is_gem) gems++
+  }
+  // cities: try to look up from wishlistPlaces (which has city field)
+  const cities = new Set()
+  for (const p of wishlist.wishlistPlaces) {
+    if (placeIds.has(p.id) && p.city) cities.add(p.city)
+  }
+  return { places: placeIds.size, gems, cities: cities.size || '–' }
+})
 
 // Password change
 const showPasswordForm = ref(false)
@@ -182,7 +231,6 @@ async function onChangePassword() {
   }
 }
 
-// Avatar upload
 async function onAvatarChange(e) {
   const file = e.target.files?.[0]
   if (!file) return
@@ -190,7 +238,7 @@ async function onAvatarChange(e) {
   formData.append('avatar', file)
   try {
     const { data } = await http.post('/auth/avatar', formData, {
-      headers: { 'Content-Type': 'multipart/form-data' }
+      headers: { 'Content-Type': 'multipart/form-data' },
     })
     auth.user.avatar_url = data.avatar_url
     toast.success('Аватар обновлён')
@@ -200,7 +248,9 @@ async function onAvatarChange(e) {
 }
 
 const displayedReviews = computed(() => {
-  const list = reviewsStore.reviews.filter(r => editingReview.value ? r.id !== editingReview.value.id : true)
+  const list = reviewsStore.reviews.filter((r) =>
+    editingReview.value ? r.id !== editingReview.value.id : true,
+  )
   if (reviewsExpanded.value) return list
   return list.slice(0, 5)
 })
@@ -214,12 +264,8 @@ async function handleUpdateReview(data) {
   const reviewId = editingReview.value.id
   try {
     await reviewsStore.updateReview(placeId, reviewId, data)
-    if (photoFile) {
-      await reviewsStore.uploadReviewImage(placeId, reviewId, photoFile)
-    }
-    if (videoFile) {
-      await reviewsStore.uploadReviewVideo(placeId, reviewId, videoFile)
-    }
+    if (photoFile) await reviewsStore.uploadReviewImage(placeId, reviewId, photoFile)
+    if (videoFile) await reviewsStore.uploadReviewVideo(placeId, reviewId, videoFile)
     editingReview.value = null
     toast.success('Отзыв обновлён')
   } catch (e) {
@@ -239,11 +285,6 @@ async function handleDeleteReview(rv) {
   if (auth.user) await reviewsStore.fetchByUser(auth.user.id)
 }
 
-function toggleVideo(e) {
-  const v = e.target
-  if (v.paused) { v.muted = false; v.play() } else { v.pause() }
-}
-
 async function onAddCustom() {
   if (!customName.value.trim()) return
   await wishlist.addCustom(customName.value.trim(), customNote.value.trim() || null)
@@ -255,10 +296,28 @@ async function onDeleteCustom(id) {
   await wishlist.deleteCustom(id)
 }
 
-function formatDate(dateStr) {
+const customTilts = ['sb-t-l3', 'sb-t-r2', 'sb-t-l2', 'sb-t-r3']
+function customTilt(i) { return customTilts[i % customTilts.length] }
+const customTapes = ['', 'rose', 'mint', 'blue']
+function customTape(i) { return customTapes[i % customTapes.length] }
+function customTapeStyle(i) {
+  const variants = [
+    { top: '-8px', left: '34px', transform: 'rotate(-12deg)' },
+    { top: '-8px', right: '40px', transform: 'rotate(8deg)' },
+    { top: '-9px', left: '60px', transform: 'rotate(-6deg)' },
+  ]
+  return variants[i % variants.length]
+}
+
+function formatJoinDate(dateStr) {
   if (!dateStr) return ''
   const d = new Date(dateStr)
-  return d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' })
+  return d.toLocaleDateString('ru-RU', { month: 'long', year: 'numeric' })
+}
+
+function logout() {
+  auth.logout()
+  router.push('/login')
 }
 
 onMounted(() => {
@@ -270,31 +329,45 @@ onMounted(() => {
 })
 </script>
 
-<style scoped>
+<style scoped lang="scss">
+.me {
+  padding-top: calc(18px + var(--aeva-safe-top, 0px));
+  padding-inline: 16px;
+}
+
+.me-header {
+  text-align: center;
+  margin-bottom: 14px;
+}
+
 .avatar-wrap {
   position: relative;
-  width: 64px;
-  height: 64px;
+  width: 96px;
+  height: 96px;
   border-radius: 50%;
   overflow: hidden;
+  margin: 0 auto 10px;
   cursor: pointer;
-  flex-shrink: 0;
+  box-shadow:
+    0 0 0 4px #fdfcf7,
+    0 2px 4px rgba(40, 30, 20, 0.18),
+    0 8px 18px rgba(40, 30, 20, 0.12);
 }
-.avatar-img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
+.avatar-img,
 .avatar-placeholder {
   width: 100%;
   height: 100%;
+}
+.avatar-img { object-fit: cover; }
+.avatar-placeholder {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #6c757d;
-  color: #fff;
-  font-size: 1.5rem;
+  background: oklch(0.78 0.10 30);
+  color: oklch(0.22 0.05 30);
+  font-family: var(--sb-serif);
   font-weight: 600;
+  font-size: 32px;
 }
 .avatar-overlay {
   position: absolute;
@@ -302,35 +375,204 @@ onMounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(0,0,0,0.4);
+  background: rgba(40, 30, 20, 0.4);
+  color: #fff;
+  font-family: var(--sb-hand);
+  font-size: 16px;
   opacity: 0;
   transition: opacity 0.2s;
-  font-size: 1.2rem;
 }
-.avatar-wrap:hover .avatar-overlay {
-  opacity: 1;
+.avatar-wrap:hover .avatar-overlay { opacity: 1; }
+
+.me-name {
+  font-family: var(--sb-serif);
+  font-style: italic;
+  font-weight: 500;
+  font-size: 24px;
+  color: var(--sb-ink);
+  word-break: break-word;
+  overflow-wrap: break-word;
 }
-.review-img-wrap-sm {
-  overflow: hidden;
-  border-radius: 0.75rem 0.75rem 0 0;
+.me-since {
+  font-family: var(--sb-hand);
+  font-size: 16px;
+  color: var(--sb-ink-mute);
+  margin-top: 2px;
 }
-.review-img-sm {
-  width: 100%;
-  max-height: 150px;
-  object-fit: cover;
+
+.me-stats {
+  display: inline-block;
+  margin: 14px 0 6px;
 }
-.video-circle-profile {
-  width: 100px;
-  height: 100px;
-  border-radius: 50%;
-  overflow: hidden;
-  background: #000;
+
+.me-tabs {
+  display: flex;
+  gap: 6px;
+  justify-content: center;
+  margin: 18px 0 14px;
+  flex-wrap: wrap;
+}
+.me-tab {
+  background: transparent;
+  border: 1.4px solid rgba(40, 30, 20, 0.18);
+  border-radius: 999px;
+  padding: 6px 14px;
+  font-family: var(--sb-serif);
+  font-style: italic;
+  font-size: 14px;
+  color: var(--sb-ink-soft);
   cursor: pointer;
-  border: 2px solid #dee2e6;
+  &.active {
+    background: var(--sb-ink);
+    color: var(--sb-paper);
+    border-color: var(--sb-ink);
+  }
 }
-.video-preview-profile {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
+
+.me-section {
+  padding-bottom: 6px;
+}
+
+.add-link {
+  font-family: var(--sb-serif);
+  font-style: italic;
+  font-size: 14px;
+  color: var(--sb-terracotta);
+  text-decoration: none;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  &:disabled { color: var(--sb-ink-mute); cursor: not-allowed; }
+  &:hover:not(:disabled) { color: oklch(0.5 0.14 30); }
+}
+
+.me-more {
+  text-align: center;
+  padding: 8px 0 18px;
+}
+.more-link {
+  background: transparent;
+  border: none;
+  font-family: var(--sb-hand);
+  font-size: 16px;
+  color: var(--sb-ink-mute);
+  cursor: pointer;
+  padding: 6px 14px;
+}
+
+.results-list {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.custom-add {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+.custom-add .form-control {
+  flex: 1 1 140px;
+  min-height: 40px;
+  font-family: var(--sb-serif);
+}
+
+.custom-notes {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 22px 18px;
+  margin: 12px 0;
+}
+.custom-note {
+  position: relative;
+  display: block;
+}
+.note-name {
+  font-family: var(--sb-hand);
+  font-size: 20px;
+  color: var(--sb-ink);
+  font-weight: 500;
+  line-height: 1.05;
+}
+.note-text {
+  font-family: var(--sb-hand);
+  font-size: 16px;
+  color: var(--sb-ink-mute);
+  margin-top: 4px;
+}
+.note-remove {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: oklch(0.92 0.07 25);
+  color: var(--sb-terracotta);
+  border: none;
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  z-index: 4;
+  box-shadow: 0 1px 2px rgba(40, 15, 5, 0.3);
+  &:hover { background: var(--sb-terracotta); color: #fff; }
+}
+
+.settings-card {
+  background: #fdfcf7;
+  padding: 14px;
+  border-radius: 1px;
+  box-shadow:
+    0 1px 1px rgba(40, 30, 20, 0.06),
+    0 4px 14px rgba(40, 30, 20, 0.07);
+  margin-bottom: 14px;
+}
+.settings-h {
+  font-family: var(--sb-serif);
+  font-style: italic;
+  font-weight: 500;
+  font-size: 16px;
+  color: var(--sb-ink);
+  margin: 0 0 8px;
+}
+.settings-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.settings-row {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+}
+.btn-apply {
+  background: var(--sb-terracotta);
+  color: #fff;
+  border: none;
+  border-radius: 999px;
+  padding: 8px 16px;
+  font-family: var(--sb-serif);
+  font-style: italic;
+  cursor: pointer;
+  &:disabled { opacity: 0.5; cursor: not-allowed; }
+}
+.reset-btn {
+  background: transparent;
+  border: none;
+  font-family: var(--sb-serif);
+  font-style: italic;
+  color: var(--sb-ink-mute);
+  cursor: pointer;
+}
+.danger-link {
+  background: transparent;
+  border: none;
+  font-family: var(--sb-serif);
+  font-style: italic;
+  font-size: 14px;
+  color: var(--sb-terracotta);
+  cursor: pointer;
+  padding: 4px 0;
 }
 </style>

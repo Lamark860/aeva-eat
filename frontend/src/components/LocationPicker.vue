@@ -48,6 +48,7 @@
 <script setup>
 /* global ymaps */
 import { ref, onMounted, onUnmounted, watch } from 'vue'
+import http from '../api/http'
 
 const props = defineProps({
   modelValue: {
@@ -129,12 +130,11 @@ async function fetchSuggestions(q) {
   try {
     const fullQ = buildQuery(q)
     const center = map ? map.getCenter() : [55.7558, 37.6173]
-    const params = new URLSearchParams({
-      text: fullQ,
-      ll: `${center[1]},${center[0]}`
+    // Use the auth-aware http client — /api/suggest is behind JWT middleware,
+    // bare fetch() returns 401 silently and the dropdown stays empty.
+    const { data } = await http.get('/suggest', {
+      params: { text: fullQ, ll: `${center[1]},${center[0]}` },
     })
-    const resp = await fetch(`/api/suggest?${params}`)
-    const data = await resp.json()
     const items = (data.results || []).map(r => {
       const name = r.title?.text || ''
       const sub = r.subtitle?.text || ''

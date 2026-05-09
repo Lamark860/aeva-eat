@@ -1,0 +1,1 @@
+import{o as e,c as t,r,f as n}from"./index-PTEnz0JH.js";const p={__name:"Stamp",props:{kind:{type:String,default:""}},setup(s){return(a,o)=>(e(),t("span",{class:n(["sb-stamp",s.kind])},[r(a.$slots,"default")],2))}};export{p as _};

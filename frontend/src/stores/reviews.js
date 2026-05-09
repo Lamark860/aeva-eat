@@ -57,7 +57,10 @@ export const useReviewsStore = defineStore('reviews', () => {
 
   async function uploadReviewVideo(placeId, reviewId, blob) {
     const formData = new FormData()
-    formData.append('video', blob, 'video.webm')
+    // Pick filename extension based on the actual blob type so the backend's
+    // Content-Type validation (video/webm | video/mp4) accepts it.
+    const ext = (blob.type || '').includes('mp4') ? 'mp4' : 'webm'
+    formData.append('video', blob, `video.${ext}`)
     const { data } = await http.post(`/places/${placeId}/reviews/${reviewId}/video`, formData, {
       headers: { 'Content-Type': 'multipart/form-data' }
     })

@@ -50,6 +50,10 @@ $input-focus-box-shadow:   0 0 0 0.2rem rgba($primary, 0.15);
 // --------------- Import Bootstrap ---------------
 @import 'bootstrap/scss/bootstrap';
 
+// Scrapbook design system — primitives for Доска (and future migrated screens).
+// Loaded after Bootstrap so .sb-* classes win where they overlap.
+@import './scrapbook.scss';
+
 // --------------- Custom global styles ---------------
 
 body {

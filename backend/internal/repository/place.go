@@ -120,7 +120,16 @@ func (r *PlaceRepo) List(f PlaceFilter) (*PlaceListResult, error) {
 	query := `
 		SELECT p.id, p.name, p.address, p.city, p.lat, p.lng,
 			p.cuisine_type_id, ct.name AS cuisine_type, p.website,
-			p.created_by, p.image_url, p.created_at, p.updated_at,
+			p.created_by,
+			COALESCE(
+				p.image_url,
+				(SELECT r.image_url
+				   FROM reviews r
+				  WHERE r.place_id = p.id AND r.image_url IS NOT NULL
+				  ORDER BY r.created_at ASC, r.id ASC
+				  LIMIT 1)
+			) AS image_url,
+			p.created_at, p.updated_at,
 			COALESCE(rs.avg_food, 0), COALESCE(rs.avg_service, 0), COALESCE(rs.avg_vibe, 0),
 			COALESCE(rs.review_count, 0),
 			EXISTS(SELECT 1 FROM reviews rv WHERE rv.place_id = p.id AND rv.is_gem = true) AS is_gem_place
@@ -195,7 +204,16 @@ func (r *PlaceRepo) GetByID(id int) (*model.Place, error) {
 	err := r.db.QueryRow(`
 		SELECT p.id, p.name, p.address, p.city, p.lat, p.lng,
 			p.cuisine_type_id, ct.name AS cuisine_type, p.website,
-			p.created_by, p.image_url, p.created_at, p.updated_at,
+			p.created_by,
+			COALESCE(
+				p.image_url,
+				(SELECT r.image_url
+				   FROM reviews r
+				  WHERE r.place_id = p.id AND r.image_url IS NOT NULL
+				  ORDER BY r.created_at ASC, r.id ASC
+				  LIMIT 1)
+			) AS image_url,
+			p.created_at, p.updated_at,
 			COALESCE(rs.avg_food, 0), COALESCE(rs.avg_service, 0), COALESCE(rs.avg_vibe, 0),
 			COALESCE(rs.review_count, 0),
 			EXISTS(SELECT 1 FROM reviews rv WHERE rv.place_id = p.id AND rv.is_gem = true) AS is_gem_place
@@ -349,7 +367,7 @@ func (r *PlaceRepo) ListCities() ([]string, error) {
 
 func (r *PlaceRepo) getReviewers(placeID int) ([]model.Reviewer, error) {
 	rows, err := r.db.Query(`
-		SELECT DISTINCT u.id, u.username
+		SELECT DISTINCT u.id, u.username, u.avatar_url
 		FROM users u
 		JOIN review_authors ra ON ra.user_id = u.id
 		JOIN reviews rv ON rv.id = ra.review_id
@@ -364,7 +382,7 @@ func (r *PlaceRepo) getReviewers(placeID int) ([]model.Reviewer, error) {
 	var reviewers []model.Reviewer
 	for rows.Next() {
 		var rev model.Reviewer
-		if err := rows.Scan(&rev.ID, &rev.Username); err != nil {
+		if err := rows.Scan(&rev.ID, &rev.Username, &rev.AvatarURL); err != nil {
 			return nil, err
 		}
 		reviewers = append(reviewers, rev)

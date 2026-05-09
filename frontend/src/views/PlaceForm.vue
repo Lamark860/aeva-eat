@@ -1,9 +1,9 @@
 <template>
-  <div class="row justify-content-center">
-    <div class="col-md-7">
-      <div class="form-header mb-4">
-        <h3 class="mb-1">{{ isEdit ? 'Редактировать заведение' : 'Новое заведение' }}</h3>
-        <p class="text-muted small mb-0">Найдите заведение на карте или введите данные вручную</p>
+  <div class="sb-paper sb-grain sb-screen place-form-wrap">
+    <div class="form-shell">
+      <div class="form-header">
+        <h1 class="title">{{ headerTitle }}</h1>
+        <p class="sub">{{ headerSub }}</p>
       </div>
 
       <div v-if="error" class="alert alert-danger">{{ error }}</div>
@@ -15,7 +15,7 @@
           <LocationPicker
             :modelValue="{ lat: form.lat, lng: form.lng }"
             :city="form.city"
-            @update:modelValue="onLocationChange"
+            @update:model-value="onLocationChange"
             @address-found="onAddressFound"
             @place-found="onPlaceFound"
           />
@@ -76,7 +76,7 @@
               <label class="form-label fw-medium">Тип кухни</label>
               <MultiSelect
                 :modelValue="form.cuisine_type_ids"
-                @update:modelValue="form.cuisine_type_ids = $event"
+                @update:model-value="form.cuisine_type_ids = $event"
                 :options="catalogs.cuisineTypes"
                 placeholder="Выберите тип кухни..."
               />
@@ -85,7 +85,7 @@
               <label class="form-label fw-medium">Категории</label>
               <MultiSelect
                 :modelValue="form.category_ids"
-                @update:modelValue="form.category_ids = $event"
+                @update:model-value="form.category_ids = $event"
                 :options="catalogs.categories"
                 placeholder="Выберите категории..."
               />
@@ -135,12 +135,12 @@
         </div>
 
         <!-- Кнопки — стек вертикально на мобиле, чтобы primary CTA был полной ширины -->
-        <div class="d-flex flex-column flex-md-row gap-2 pt-2 pb-4">
-          <button type="submit" class="btn btn-primary btn-lg flex-md-grow-1" :disabled="loading || !form.name">
+        <div class="form-cta">
+          <button type="submit" class="btn btn-apply" :disabled="loading || !form.name">
             <span v-if="loading" class="spinner-border spinner-border-sm me-1"></span>
-            {{ isEdit ? 'Сохранить изменения' : 'Создать заведение' }}
+            {{ isEdit ? 'сохранить' : 'создать' }}
           </button>
-          <router-link to="/places" class="btn btn-outline-secondary btn-lg">Отмена</router-link>
+          <router-link to="/places" class="cancel-link">отмена</router-link>
         </div>
       </form>
     </div>
@@ -165,6 +165,18 @@ const wishlist = useWishlistStore()
 const toast = useToast()
 
 const isEdit = computed(() => !!route.params.id)
+const intent = computed(() => route.query.intent)
+
+const headerTitle = computed(() => {
+  if (isEdit.value) return 'Редактировать место'
+  if (intent.value === 'visit') return 'Новый визит'
+  return 'Новое место'
+})
+const headerSub = computed(() => {
+  if (isEdit.value) return 'правки сохраняются мгновенно'
+  if (intent.value === 'visit') return 'сначала находим место — потом оценишь'
+  return 'найдите на карте или введите вручную'
+})
 const error = ref('')
 const loading = ref(false)
 const selectedImage = ref(null)
@@ -258,7 +270,15 @@ async function handleSubmit() {
         } catch { /* wishlist is best-effort */ }
       }
       toast.success('Заведение создано!')
-      router.push(`/places/${created.id}`)
+      // If user came in via "+ добавить → новый визит", forward them to the
+      // detail screen with `review=open` so the rating form auto-expands.
+      // Otherwise (wishlist-style add or direct visit) just land on the place.
+      const intent = route.query.intent
+      if (intent === 'visit') {
+        router.push({ path: `/places/${created.id}`, query: { review: 'open' } })
+      } else {
+        router.push(`/places/${created.id}`)
+      }
     }
   } catch (e) {
     error.value = e.response?.data?.error || 'Ошибка при сохранении'
@@ -305,44 +325,113 @@ async function handleImageUpload() {
 }
 </script>
 
-<style scoped>
+<style scoped lang="scss">
+.place-form-wrap {
+  padding-top: calc(18px + var(--aeva-safe-top, 0px));
+  padding-inline: 16px;
+}
+
+.form-shell {
+  max-width: 640px;
+  margin: 0 auto;
+}
+
+.form-header {
+  margin-bottom: 18px;
+  text-align: center;
+
+  .title {
+    font-family: var(--sb-serif);
+    font-style: italic;
+    font-weight: 500;
+    font-size: 26px;
+    color: var(--sb-ink);
+    margin: 0 0 4px;
+  }
+  .sub {
+    font-family: var(--sb-hand);
+    font-size: 16px;
+    color: var(--sb-ink-mute);
+    margin: 0;
+  }
+}
+
 .form-section {
-  margin-bottom: 1.5rem;
+  background: #fdfcf7;
+  padding: 14px;
+  border-radius: 1px;
+  box-shadow:
+    0 1px 1px rgba(40, 30, 20, 0.06),
+    0 4px 14px rgba(40, 30, 20, 0.07);
+  margin-bottom: 14px;
 }
-.form-header h3 {
-  font-weight: 700;
+
+/* Bootstrap form-label override on this screen — handwritten subdued */
+.form-section :deep(.form-label) {
+  font-family: var(--sb-hand);
+  font-size: 16px;
+  font-weight: 400;
+  color: var(--sb-ink-mute);
+  margin-bottom: 4px;
 }
+
 .found-place-card {
-  background: #f8f9fa;
-  border: 1px solid #e9ecef;
-  border-radius: 0.75rem;
-  padding: 0.75rem 1rem;
+  background: oklch(0.94 0.05 85 / 0.6);
+  border: 1.4px dashed rgba(40, 30, 20, 0.25);
+  border-radius: 4px;
+  padding: 10px 12px;
 }
-.found-icon {
-  font-size: 1.3rem;
-  line-height: 1;
-}
+.found-icon { font-size: 1.3rem; line-height: 1; }
 .manual-arrow {
   display: inline-block;
   transition: transform 0.2s;
   font-size: 0.85rem;
 }
-.manual-arrow.open {
-  transform: rotate(90deg);
-}
+.manual-arrow.open { transform: rotate(90deg); }
 .manual-fields {
-  border-left: 3px solid #e9ecef;
+  border-left: 2px dashed rgba(40, 30, 20, 0.2);
   padding-left: 1rem;
 }
 .photo-upload-area {
-  border: 2px dashed #d0cdc9;
-  border-radius: 0.75rem;
+  border: 2px dashed rgba(40, 30, 20, 0.25);
+  border-radius: 4px;
   padding: 1.5rem;
   cursor: pointer;
   transition: border-color 0.2s, background 0.2s;
+  background: oklch(0.97 0.018 82);
 }
 .photo-upload-area:hover {
-  border-color: var(--bs-primary);
-  background: #fef7f4;
+  border-color: var(--sb-terracotta);
+  background: oklch(0.95 0.04 85 / 0.5);
+}
+
+.form-cta {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 8px 0 24px;
+}
+.btn-apply {
+  background: var(--sb-terracotta);
+  color: #fff;
+  border: none;
+  border-radius: 999px;
+  padding: 12px 22px;
+  font-family: var(--sb-serif);
+  font-style: italic;
+  font-size: 15px;
+  cursor: pointer;
+  flex: 1;
+  &:disabled { opacity: 0.5; cursor: not-allowed; }
+  &:hover:not(:disabled) { background: oklch(0.55 0.14 30); color: #fff; }
+}
+.cancel-link {
+  font-family: var(--sb-serif);
+  font-style: italic;
+  font-size: 15px;
+  color: var(--sb-ink-mute);
+  text-decoration: none;
+  padding: 12px 8px;
+  &:hover { color: var(--sb-ink); }
 }
 </style>

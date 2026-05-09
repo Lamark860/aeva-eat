@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8"/>
+  <title>AEVA Eat — главный экран · варианты</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+  <link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,500;0,600;1,400;1,500&family=Caveat:wght@400;500;600&display=swap" rel="stylesheet"/>
+  <link rel="stylesheet" href="scrapbook.css"/>
+  <style>
+    html, body { margin: 0; padding: 0; }
+    body { background: #f0eee9; }
+  </style>
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel" src="ios-frame.jsx"></script>
+  <script type="text/babel" src="design-canvas.jsx"></script>
+  <script type="text/babel" src="variants.jsx"></script>
+  <script type="text/babel" src="v2.jsx"></script>
+
+  <script type="text/babel">
+    const { DesignCanvas, DCSection, DCArtboard, DCPostIt } = window;
+
+    function PhoneFrame({ children }) {
+      return (
+        <IOSDevice width={402} height={874}>
+          <div style={{ height: '100%', position: 'relative', background: 'var(--paper)' }}>
+            {children}
+          </div>
+        </IOSDevice>
+      );
+    }
+
+    function App() {
+      return (
+        <DesignCanvas>
+          <DCSection id="intro" title="AEVA Eat — главный экран" subtitle="скрапбук, mobile-first, 3 варианта">
+            <DCArtboard id="system" label="система" width={420} height={874}>
+              <div style={{ padding: '28px 24px', fontFamily: 'var(--serif)', color: 'var(--ink)', height: '100%', boxSizing: 'border-box' }} className="paper grain">
+                <div className="wordmark" style={{ fontSize: 32 }}>aeva<span className="dot"/>eat</div>
+                <div style={{ fontFamily: 'var(--hand)', fontSize: 20, color: 'var(--ink-mute)', marginTop: 6 }}>система · v0</div>
+
+                <div style={{ marginTop: 22, fontStyle: 'italic', fontSize: 14, lineHeight: 1.45, color: 'var(--ink-soft)' }}>
+                  Камерный дневник еды для своих. Скрапбук — в смысле <i>артефактов</i>: полароиды, скотч, штампы, билетики-рейтинги, рукописные пометки. Раскладка строгая, артефакты — живые.
+                </div>
+
+                <div style={{ marginTop: 22, display: 'flex', flexDirection: 'column', gap: 18 }}>
+                  <div>
+                    <div className="section-head" style={{ padding: 0, marginBottom: 8 }}><h2>Бумага и чернила</h2></div>
+                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                      {[
+                        { name: 'paper', c: 'oklch(0.965 0.018 82)' },
+                        { name: 'edge', c: 'oklch(0.88 0.03 82)' },
+                        { name: 'ink', c: 'oklch(0.22 0.02 60)' },
+                        { name: 'soft', c: 'oklch(0.42 0.02 60)' },
+                        { name: 'terra', c: 'oklch(0.58 0.14 30)' },
+                        { name: 'ochre', c: 'oklch(0.66 0.13 85)' },
+                      ].map(s => (
+                        <div key={s.name} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+                          <div style={{ width: 38, height: 38, background: s.c, boxShadow: 'inset 0 0 0 0.5px rgba(40,30,20,0.18)' }}/>
+                          <div style={{ fontSize: 10, fontFamily: 'var(--serif)', color: 'var(--ink-mute)' }}>{s.name}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="section-head" style={{ padding: 0, marginBottom: 8 }}><h2>Артефакты</h2></div>
+                    <div style={{ position: 'relative', height: 250 }}>
+                      <div style={{ position: 'absolute', left: 0, top: 0 }}>
+                        <Polaroid photoClass="brick" caption="полароид" w={108} h={108} tilt="l3"
+                          tape={<Tape style={{ top: -10, left: 30, transform: 'rotate(-12deg)' }}/>}/>
+                      </div>
+                      <div style={{ position: 'absolute', right: 0, top: 14, width: 130 }} className="t-r2">
+                        <Note lined>записка<br/>от руки</Note>
+                        <Tape variant="rose" style={{ top: -8, left: 30, transform: 'rotate(6deg)' }}/>
+                      </div>
+                      <div style={{ position: 'absolute', left: 6, top: 168, transform: 'rotate(-3deg)' }}>
+                        <Ticket food="9" service="8" vibe="9"/>
+                      </div>
+                      <div style={{ position: 'absolute', right: 0, top: 170, display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'flex-end' }}>
+                        <Stamp>штамп</Stamp>
+                        <Stamp kind="ink">москва · 8</Stamp>
+                        <Stamp kind="gem">жемчужина</Stamp>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div style={{ fontStyle: 'italic', fontSize: 12, color: 'var(--ink-mute)', borderTop: '1px dashed rgba(40,30,20,0.2)', paddingTop: 10 }}>
+                    Шрифты: <b>Lora</b> (серифа, тело) + <b>Caveat</b> (от&nbsp;руки). Кириллица — обе.
+                  </div>
+                </div>
+              </div>
+            </DCArtboard>
+
+            <DCArtboard id="v2" label="v2 · единый скрапбук   ← новое" width={402} height={874}>
+              <PhoneFrame><V2/></PhoneFrame>
+            </DCArtboard>
+
+            <DCArtboard id="b" label="v1 · Доска + Лента (для сравнения)" width={402} height={874}>
+              <PhoneFrame><VariantB/></PhoneFrame>
+            </DCArtboard>
+
+            <DCPostIt x={1850} y={40} w={260}>
+              на любом артборде — кнопка ⤢ для фуллскрина. перетаскивай за ручку слева, переименовывай заголовок и лейблы кликом.
+            </DCPostIt>
+          </DCSection>
+        </DesignCanvas>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+  </script>
+</body>
+</html>

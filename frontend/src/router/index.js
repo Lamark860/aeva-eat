@@ -5,61 +5,61 @@ const routes = [
     path: '/',
     name: 'Home',
     component: () => import('../views/Home.vue'),
-    meta: { requiresAuth: true }
+    meta: { requiresAuth: true, scrapbook: true }
   },
   {
     path: '/login',
     name: 'Login',
     component: () => import('../views/Login.vue'),
-    meta: { guest: true }
+    meta: { guest: true, scrapbook: true }
   },
   {
     path: '/invite/:code',
     name: 'InviteRegister',
     component: () => import('../views/InviteRegister.vue'),
-    meta: { guest: true }
+    meta: { guest: true, scrapbook: true }
   },
   {
     path: '/places',
     name: 'Places',
     component: () => import('../views/Places.vue'),
-    meta: { requiresAuth: true }
+    meta: { requiresAuth: true, scrapbook: true }
   },
   {
     path: '/places/new',
     name: 'PlaceCreate',
     component: () => import('../views/PlaceForm.vue'),
-    meta: { requiresAuth: true }
+    meta: { requiresAuth: true, scrapbook: true }
   },
   {
     path: '/places/:id',
     name: 'PlaceDetail',
     component: () => import('../views/PlaceDetail.vue'),
-    meta: { requiresAuth: true }
+    meta: { requiresAuth: true, scrapbook: true }
   },
   {
     path: '/places/:id/edit',
     name: 'PlaceEdit',
     component: () => import('../views/PlaceForm.vue'),
-    meta: { requiresAuth: true }
+    meta: { requiresAuth: true, scrapbook: true }
   },
   {
     path: '/profile',
     name: 'Profile',
     component: () => import('../views/Profile.vue'),
-    meta: { requiresAuth: true }
+    meta: { requiresAuth: true, scrapbook: true }
   },
   {
     path: '/map',
     name: 'Map',
     component: () => import('../views/MapPage.vue'),
-    meta: { requiresAuth: true }
+    meta: { requiresAuth: true, scrapbook: true }
   },
   {
     path: '/invites',
     name: 'Invites',
     component: () => import('../views/Invites.vue'),
-    meta: { requiresAuth: true }
+    meta: { requiresAuth: true, scrapbook: true }
   }
 ]
 

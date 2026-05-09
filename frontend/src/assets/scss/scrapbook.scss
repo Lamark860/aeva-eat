@@ -1,0 +1,720 @@
+// =============================================
+// AEVA Eat — Scrapbook design system
+// Ported from spec/example/scrapbook.css. Mobile-first.
+// All sizes assume 360–430px viewport unless overridden.
+// =============================================
+
+:root {
+  // paper + ink
+  --sb-paper:        oklch(0.965 0.018 82);
+  --sb-paper-deep:   oklch(0.93 0.022 82);
+  --sb-paper-edge:   oklch(0.88 0.03 82);
+  --sb-ink:          oklch(0.22 0.02 60);
+  --sb-ink-soft:     oklch(0.42 0.02 60);
+  --sb-ink-mute:     oklch(0.6 0.015 60);
+
+  // accents
+  --sb-terracotta:   oklch(0.58 0.14 30);
+  --sb-ochre:        oklch(0.66 0.13 85);
+  --sb-moss:         oklch(0.55 0.09 145);
+  --sb-plum:         oklch(0.5 0.10 350);
+
+  // tape (translucent washi)
+  --sb-tape-ochre:   oklch(0.85 0.10 85 / 0.62);
+  --sb-tape-rose:    oklch(0.84 0.08 20 / 0.55);
+  --sb-tape-mint:    oklch(0.85 0.06 165 / 0.55);
+  --sb-tape-blue:    oklch(0.82 0.06 240 / 0.5);
+
+  --sb-serif: 'Lora', Georgia, 'Times New Roman', serif;
+  --sb-hand:  'Caveat', 'Marker Felt', cursive;
+}
+
+// =============================================
+// Page surface — applied as wrapper around scrapbook screens.
+// Other (still-Bootstrap) pages are unaffected.
+// =============================================
+.sb-paper {
+  background-color: var(--sb-paper);
+  background-image:
+    radial-gradient(circle at 20% 30%, rgba(120, 90, 50, 0.04) 0, transparent 40%),
+    radial-gradient(circle at 80% 70%, rgba(120, 90, 50, 0.035) 0, transparent 45%),
+    radial-gradient(circle at 50% 50%, rgba(120, 90, 50, 0.025) 0, transparent 50%);
+  font-family: var(--sb-serif);
+  color: var(--sb-ink);
+  -webkit-font-smoothing: antialiased;
+  position: relative;
+  min-height: 100%;
+}
+.sb-paper.sb-grain::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='240' height='240'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.95' numOctaves='2'/><feColorMatrix values='0 0 0 0 0.35  0 0 0 0 0.25  0 0 0 0 0.15  0 0 0 0.06 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+  opacity: 0.55;
+  mix-blend-mode: multiply;
+  z-index: 0;
+}
+.sb-paper > * { position: relative; z-index: 1; }
+
+// =============================================
+// Wordmark — top-of-screen brand for Доска
+// =============================================
+.sb-wordmark {
+  font-family: var(--sb-serif);
+  font-style: italic;
+  font-weight: 500;
+  font-size: 26px;
+  letter-spacing: 0.005em;
+  color: var(--sb-ink);
+  line-height: 1;
+
+  .dot {
+    display: inline-block;
+    width: 5px;
+    height: 5px;
+    background: var(--sb-terracotta);
+    border-radius: 50%;
+    margin: 0 1px 4px 1px;
+    vertical-align: middle;
+  }
+}
+
+// =============================================
+// Polaroid
+// =============================================
+.sb-polaroid {
+  background: #fdfcf7;
+  padding: 8px 8px 36px;
+  box-shadow:
+    0 1px 1px rgba(40, 30, 20, 0.08),
+    0 6px 14px rgba(40, 30, 20, 0.12),
+    0 0 0 0.5px rgba(40, 30, 20, 0.06);
+  position: relative;
+  display: inline-block;
+  border-radius: 1px;
+  max-width: 100%;
+
+  // Fluid mode — fills the column, photo is square via aspect-ratio.
+  &.fluid {
+    display: block;
+    width: 100%;
+  }
+}
+.sb-polaroid .photo {
+  display: block;
+  background: var(--sb-paper-deep);
+  background-image:
+    linear-gradient(135deg, transparent 0, transparent 49.6%, rgba(40, 30, 20, 0.05) 49.6%, rgba(40, 30, 20, 0.05) 50.2%, transparent 50.2%),
+    linear-gradient(135deg, transparent 0, transparent 49.6%, rgba(40, 30, 20, 0.05) 49.6%, rgba(40, 30, 20, 0.05) 50.2%, transparent 50.2%);
+  background-size: 14px 14px, 14px 14px;
+  background-position: 0 0, 7px 7px;
+  background-repeat: repeat;
+  object-fit: cover;
+}
+.sb-polaroid img.photo { background-image: none; }
+.sb-polaroid .caption {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 6px;
+  text-align: center;
+  font-family: var(--sb-hand);
+  font-size: 18px;
+  color: var(--sb-ink-soft);
+  line-height: 1;
+  padding: 0 6px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.sb-polaroid.gem-frame {
+  padding: 10px 10px 38px;
+  background:
+    linear-gradient(#fdfcf7, #fdfcf7) padding-box,
+    repeating-linear-gradient(45deg, oklch(0.55 0.14 30 / 0.7) 0 4px, oklch(0.66 0.13 85 / 0.7) 4px 8px) border-box;
+  border: 2px solid transparent;
+}
+
+// photo placeholder colors (used when image_url missing)
+.sb-photo-warm   { background-color: oklch(0.78 0.06 60); }
+.sb-photo-olive  { background-color: oklch(0.7 0.07 110); }
+.sb-photo-dusk   { background-color: oklch(0.55 0.06 30); }
+.sb-photo-sage   { background-color: oklch(0.72 0.05 150); }
+.sb-photo-brick  { background-color: oklch(0.5 0.10 30); }
+.sb-photo-cream  { background-color: oklch(0.85 0.04 85); }
+.sb-photo-slate  { background-color: oklch(0.55 0.03 240); }
+.sb-photo-peach  { background-color: oklch(0.78 0.08 50); }
+.sb-photo-indigo { background-color: oklch(0.4 0.06 280); }
+
+// =============================================
+// Tape
+// =============================================
+.sb-tape {
+  position: absolute;
+  width: 56px;
+  height: 18px;
+  background: var(--sb-tape-ochre);
+  background-image: repeating-linear-gradient(
+    -45deg,
+    rgba(255, 255, 255, 0.18) 0 4px,
+    transparent 4px 9px
+  );
+  box-shadow: 0 1px 1px rgba(40, 30, 20, 0.06);
+  pointer-events: none;
+  z-index: 2;
+
+  &.rose { background-color: var(--sb-tape-rose); }
+  &.mint { background-color: var(--sb-tape-mint); }
+  &.blue { background-color: var(--sb-tape-blue); }
+}
+
+// =============================================
+// Stamp
+// =============================================
+.sb-stamp {
+  display: inline-block;
+  font-family: var(--sb-serif);
+  font-weight: 600;
+  font-size: 9.5px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--sb-terracotta);
+  border: 1.4px solid var(--sb-terracotta);
+  padding: 3px 7px 2px;
+  border-radius: 2px;
+  line-height: 1;
+  white-space: nowrap;
+  box-shadow: inset 0 0 0 0.5px rgba(140, 60, 30, 0.2);
+  opacity: 0.92;
+
+  &.ink  { color: var(--sb-ink);  border-color: var(--sb-ink); }
+  &.moss { color: var(--sb-moss); border-color: var(--sb-moss); }
+  &.plum { color: var(--sb-plum); border-color: var(--sb-plum); }
+  &.gem  { color: var(--sb-terracotta); border-color: var(--sb-terracotta); background: oklch(0.94 0.05 85 / 0.5); }
+}
+
+// =============================================
+// Ticket — ratings block (food / service / vibe)
+// =============================================
+.sb-ticket {
+  display: inline-flex;
+  align-items: stretch;
+  background: oklch(0.93 0.04 85);
+  font-family: var(--sb-serif);
+  position: relative;
+  border-radius: 2px;
+  box-shadow:
+    0 1px 1px rgba(40, 30, 20, 0.08),
+    0 2px 4px rgba(40, 30, 20, 0.06);
+
+  .stub {
+    padding: 6px 10px 6px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    border-right: 1.5px dashed rgba(40, 30, 20, 0.25);
+
+    &:last-child { border-right: none; }
+
+    .lbl {
+      font-family: var(--sb-serif);
+      font-size: 8px;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--sb-ink-mute);
+      line-height: 1;
+    }
+    .val {
+      font-family: var(--sb-hand);
+      font-size: 22px;
+      color: var(--sb-ink);
+      line-height: 1;
+      margin-top: 1px;
+    }
+  }
+
+  // punched circles on the sides
+  &::before,
+  &::after {
+    content: '';
+    position: absolute;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--sb-paper);
+    top: 50%;
+    transform: translateY(-50%);
+    box-shadow: inset 0 0 0 0.5px rgba(40, 30, 20, 0.1);
+  }
+  &::before { left: -5px; }
+  &::after  { right: -5px; }
+
+  // Compact mode — shrunk for tight cells (Доска grid columns at 360px viewport).
+  &.compact {
+    .stub {
+      padding: 4px 7px;
+
+      .lbl { font-size: 7px; letter-spacing: 0.14em; }
+      .val { font-size: 17px; }
+    }
+  }
+}
+
+// =============================================
+// Note — handwritten paper scrap
+// =============================================
+.sb-note {
+  background: oklch(0.92 0.045 85);
+  padding: 10px 12px 12px;
+  font-family: var(--sb-hand);
+  color: var(--sb-ink);
+  font-size: 18px;
+  line-height: 1.15;
+  box-shadow:
+    0 1px 1px rgba(40, 30, 20, 0.08),
+    0 4px 10px rgba(40, 30, 20, 0.10);
+  border-radius: 1px;
+  position: relative;
+  // Long unbroken words (URLs, compound names) shouldn't burst past the note edge.
+  word-break: break-word;
+  overflow-wrap: break-word;
+
+  &.lined {
+    background-image: repeating-linear-gradient(
+      to bottom,
+      transparent 0 22px,
+      rgba(40, 30, 20, 0.12) 22px 22.5px
+    );
+  }
+}
+
+// =============================================
+// Author tag — initial circle pinned to artifact corner
+// =============================================
+.sb-author-tag {
+  position: absolute;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--sb-serif);
+  font-weight: 600;
+  font-size: 10px;
+  color: var(--sb-ink);
+  box-shadow:
+    0 0 0 2px #fdfcf7,
+    0 1px 2px rgba(40, 30, 20, 0.25);
+  z-index: 3;
+  background: var(--sb-paper-deep);
+
+  &.terra { background: oklch(0.78 0.10 30);  color: oklch(0.22 0.05 30); }
+  &.ochre { background: oklch(0.84 0.10 85);  color: oklch(0.25 0.05 85); }
+  &.moss  { background: oklch(0.78 0.07 145); color: oklch(0.22 0.05 145); }
+  &.plum  { background: oklch(0.78 0.07 350); color: oklch(0.25 0.05 350); }
+}
+
+// =============================================
+// Video kruzhok — round video thumbnail
+// =============================================
+.sb-kruzhok {
+  width: 86px;
+  height: 86px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 30% 25%, oklch(0.45 0.05 240), oklch(0.25 0.04 240));
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow:
+    0 0 0 3px #fdfcf7,
+    0 2px 4px rgba(40, 30, 20, 0.18),
+    0 8px 18px rgba(40, 30, 20, 0.18);
+  position: relative;
+  color: rgba(255, 255, 255, 0.85);
+
+  .play {
+    width: 0;
+    height: 0;
+    border-style: solid;
+    border-width: 8px 0 8px 12px;
+    border-color: transparent transparent transparent currentColor;
+    margin-left: 3px;
+  }
+  .duration {
+    position: absolute;
+    bottom: 2px;
+    background: rgba(0, 0, 0, 0.5);
+    color: #fff;
+    font-family: var(--sb-serif);
+    font-size: 9.5px;
+    letter-spacing: 0.04em;
+    padding: 1px 6px;
+    border-radius: 8px;
+    left: 50%;
+    transform: translateX(-50%);
+  }
+}
+
+// =============================================
+// Pin button — pinned-with-pushpin pill ("+ добавить")
+// =============================================
+.sb-pin-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px 6px 8px;
+  background: oklch(0.93 0.04 85);
+  color: var(--sb-ink);
+  font-family: var(--sb-serif);
+  font-style: italic;
+  font-size: 14px;
+  border-radius: 999px;
+  border: none;
+  cursor: pointer;
+  box-shadow:
+    0 1px 1px rgba(40, 30, 20, 0.1),
+    0 3px 8px rgba(40, 30, 20, 0.14);
+  position: relative;
+  min-height: 32px;
+
+  .plus {
+    font-family: var(--sb-serif);
+    font-style: normal;
+    font-weight: 500;
+    font-size: 18px;
+    line-height: 1;
+    color: var(--sb-terracotta);
+    margin-top: -1px;
+  }
+}
+
+// =============================================
+// Gem badge — animated diamond
+// =============================================
+.sb-gem-badge {
+  position: relative;
+  display: inline-block;
+  filter: drop-shadow(0 1px 1.5px rgba(40, 30, 20, 0.18));
+
+  svg { display: block; width: 100%; height: 100%; }
+
+  .gleam {
+    transform-origin: center;
+    animation: sb-gem-gleam 4.6s ease-in-out infinite;
+  }
+}
+@keyframes sb-gem-gleam {
+  0%, 70%, 100% { opacity: 0; transform: translate(-6px, -6px) scale(0.7); }
+  78%           { opacity: 0.95; transform: translate(0, 0) scale(1.0); }
+  86%           { opacity: 0; transform: translate(6px, 6px) scale(0.8); }
+}
+
+// =============================================
+// Strike-through (wishlist → visit)
+// =============================================
+.sb-struck {
+  position: relative;
+
+  &::after {
+    content: '';
+    position: absolute;
+    left: -4px;
+    right: -4px;
+    top: 55%;
+    height: 3px;
+    background: oklch(0.55 0.14 30);
+    transform: rotate(-3deg);
+    border-radius: 2px;
+    opacity: 0.85;
+    pointer-events: none;
+  }
+}
+
+// =============================================
+// Week heading
+// =============================================
+.sb-week-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 18px 0;
+
+  .dates {
+    font-family: var(--sb-serif);
+    font-style: italic;
+    font-weight: 500;
+    font-size: 18px;
+    color: var(--sb-ink);
+  }
+  .rule {
+    flex: 1;
+    height: 1px;
+    background: rgba(40, 30, 20, 0.18);
+    margin-top: 4px;
+  }
+}
+
+// Section heading (italic serif)
+.sb-section-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 0 16px;
+
+  h2 {
+    font-family: var(--sb-serif);
+    font-weight: 500;
+    font-style: italic;
+    font-size: 22px;
+    letter-spacing: 0.01em;
+    color: var(--sb-ink);
+    margin: 0;
+  }
+  .sub {
+    font-family: var(--sb-hand);
+    font-size: 16px;
+    color: var(--sb-ink-mute);
+  }
+}
+
+// =============================================
+// Bottom tab bar — scrapbook variant
+// =============================================
+.sb-tabbar {
+  background: oklch(0.97 0.015 82 / 0.94);
+  backdrop-filter: blur(8px) saturate(140%);
+  -webkit-backdrop-filter: blur(8px) saturate(140%);
+  border-top: 0.5px solid rgba(40, 30, 20, 0.12);
+  display: flex;
+  padding: 8px 0 calc(14px + var(--aeva-safe-bottom, 0px));
+  font-family: var(--sb-serif);
+
+  .tab {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+    font-size: 10.5px;
+    letter-spacing: 0.04em;
+    color: var(--sb-ink-mute);
+    text-decoration: none;
+
+    &.active { color: var(--sb-ink); }
+
+    .glyph {
+      font-family: var(--sb-hand);
+      font-size: 21px;
+      line-height: 1;
+    }
+    &.active .glyph { color: var(--sb-terracotta); }
+  }
+}
+
+// =============================================
+// Tilt utilities
+// =============================================
+.sb-t-l1 { transform: rotate(-1deg); }
+.sb-t-l2 { transform: rotate(-2deg); }
+.sb-t-l3 { transform: rotate(-3.4deg); }
+.sb-t-l5 { transform: rotate(-5.2deg); }
+.sb-t-r1 { transform: rotate(1deg); }
+.sb-t-r2 { transform: rotate(2.2deg); }
+.sb-t-r3 { transform: rotate(3.6deg); }
+.sb-t-r5 { transform: rotate(5deg); }
+
+// Torn-paper divider
+.sb-tear {
+  height: 6px;
+  background-image: radial-gradient(circle at 4px 6px, transparent 3px, var(--sb-paper-edge) 3.5px);
+  background-size: 8px 6px;
+  background-repeat: repeat-x;
+  background-position: 0 0;
+  opacity: 0.5;
+}
+
+// =============================================
+// Hand-tag (e.g. "вместе: avatars")
+// =============================================
+.sb-hand-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--sb-hand);
+  font-size: 15px;
+  color: var(--sb-ink-mute);
+}
+
+// Collapsed week strip — dense polaroid stack
+.sb-collapsed-strip {
+  // Bottom padding leaves room for tilted mini-polaroid corners and shadow.
+  padding: 8px 14px 12px;
+
+  .head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 0 4px;
+
+    .dates {
+      font-family: var(--sb-serif);
+      font-style: italic;
+      font-weight: 500;
+      font-size: 16px;
+      color: var(--sb-ink-soft);
+    }
+    .rule { flex: 1; height: 1px; background: rgba(40, 30, 20, 0.14); margin-top: 3px; }
+    .meta { font-family: var(--sb-hand); font-size: 14px; color: var(--sb-ink-mute); }
+  }
+
+  .body {
+    display: flex;
+    align-items: center;
+    padding: 6px 4px 0;
+    gap: 8px;
+
+    .stack {
+      position: relative;
+      // Mini polaroid is ~85px tall with caption and tilt + bottom shadow.
+      // Don't clip — caption was getting cut by overflow:hidden.
+      height: 100px;
+      flex: 1;
+    }
+    .expand-btn {
+      background: transparent;
+      border: none;
+      cursor: pointer;
+      font-family: var(--sb-hand);
+      font-size: 16px;
+      color: var(--sb-ink-mute);
+      padding: 4px 8px;
+      flex-shrink: 0;
+    }
+  }
+}
+
+// More-link button
+.sb-more-link {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  font-family: var(--sb-hand);
+  font-size: 16px;
+  color: var(--sb-ink-mute);
+  padding: 6px 14px;
+}
+
+// =============================================
+// Bottom-sheet (action) — used by AddArtifactSheet
+// =============================================
+.sb-sheet-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(40, 30, 20, 0.32);
+  z-index: 1040;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+.sb-sheet {
+  width: 100%;
+  max-width: 480px;
+  background: var(--sb-paper);
+  border-radius: 14px 14px 0 0;
+  padding: 14px 16px calc(20px + var(--aeva-safe-bottom, 0px));
+  box-shadow: 0 -8px 30px rgba(40, 30, 20, 0.22);
+  font-family: var(--sb-serif);
+
+  .grip {
+    width: 38px;
+    height: 4px;
+    border-radius: 2px;
+    background: rgba(40, 30, 20, 0.2);
+    margin: 0 auto 12px;
+  }
+
+  .title {
+    font-family: var(--sb-serif);
+    font-style: italic;
+    font-weight: 500;
+    font-size: 18px;
+    color: var(--sb-ink);
+    margin-bottom: 10px;
+  }
+
+  .item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    background: #fdfcf7;
+    border: none;
+    box-shadow: 0 1px 1px rgba(40, 30, 20, 0.06), 0 2px 6px rgba(40, 30, 20, 0.08);
+    border-radius: 10px;
+    padding: 12px 14px;
+    margin-bottom: 8px;
+    font-family: var(--sb-serif);
+    font-size: 16px;
+    color: var(--sb-ink);
+    text-align: left;
+    cursor: pointer;
+    min-height: 52px;
+
+    .glyph {
+      width: 30px;
+      height: 30px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--sb-terracotta);
+      font-family: var(--sb-hand);
+      font-size: 22px;
+    }
+    .label { flex: 1; }
+    .hint {
+      font-family: var(--sb-hand);
+      font-size: 14px;
+      color: var(--sb-ink-mute);
+    }
+    &:disabled,
+    &.disabled {
+      opacity: 0.55;
+      cursor: not-allowed;
+    }
+  }
+
+  .cancel {
+    width: 100%;
+    background: transparent;
+    border: none;
+    padding: 10px;
+    margin-top: 4px;
+    font-family: var(--sb-serif);
+    font-size: 15px;
+    color: var(--sb-ink-mute);
+    cursor: pointer;
+  }
+}
+
+// =============================================
+// Empty state — when feed has no places yet
+// =============================================
+.sb-empty {
+  text-align: center;
+  padding: 60px 20px;
+  font-family: var(--sb-hand);
+  font-size: 19px;
+  color: var(--sb-ink-mute);
+  line-height: 1.4;
+}
+
+// =============================================
+// "Доска" container — gives padding for fixed tabbar.
+// =============================================
+.sb-screen {
+  min-height: 100vh;
+  padding-bottom: calc(72px + var(--aeva-safe-bottom, 0px));
+  position: relative;
+}

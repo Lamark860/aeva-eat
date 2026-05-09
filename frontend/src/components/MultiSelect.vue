@@ -1,31 +1,40 @@
 <template>
-  <div class="multi-select" ref="wrapper">
+  <div class="sb-multi" ref="wrapper">
     <div
-      class="multi-select-trigger form-control form-control-sm d-flex align-items-center flex-wrap gap-1"
-      @click="open = !open"
+      class="trigger"
+      :class="{ open }"
+      role="button"
+      tabindex="0"
+      @click="toggleOpen"
+      @keydown.enter.prevent="toggleOpen"
+      @keydown.space.prevent="toggleOpen"
     >
       <span
         v-for="item in selectedItems"
         :key="item.id"
-        class="multi-tag"
+        class="chip"
       >
         {{ item.name }}
-        <span class="multi-tag-remove" @click.stop="toggle(item.id)">&times;</span>
+        <span class="chip-x" role="button" aria-label="Убрать" @click.stop="toggle(item.id)">×</span>
       </span>
-      <span v-if="selectedItems.length === 0" class="text-muted">{{ placeholder }}</span>
+      <span v-if="selectedItems.length === 0" class="ph">{{ placeholder }}</span>
+      <span class="caret" aria-hidden="true">▾</span>
     </div>
-    <div v-if="open" class="multi-select-dropdown">
+
+    <div v-if="open" class="dropdown" role="listbox">
       <div
         v-for="option in options"
         :key="option.id"
-        class="multi-select-option"
+        class="opt"
         :class="{ active: modelValue.includes(option.id) }"
+        role="option"
+        :aria-selected="modelValue.includes(option.id)"
         @click="toggle(option.id)"
       >
-        <span class="multi-check">{{ modelValue.includes(option.id) ? '✓' : '' }}</span>
+        <span class="check">{{ modelValue.includes(option.id) ? '✓' : '' }}</span>
         {{ option.name }}
       </div>
-      <div v-if="options.length === 0" class="text-muted small p-2">Нет вариантов</div>
+      <div v-if="options.length === 0" class="empty">пусто</div>
     </div>
   </div>
 </template>
@@ -34,9 +43,9 @@
 import { computed, ref, onMounted, onUnmounted } from 'vue'
 
 const props = defineProps({
-  modelValue: { type: Array, default: () => [] },
-  options: { type: Array, default: () => [] },
-  placeholder: { type: String, default: 'Выберите...' }
+  modelValue:  { type: Array,  default: () => [] },
+  options:     { type: Array,  default: () => [] },
+  placeholder: { type: String, default: 'выберите…' },
 })
 
 const emit = defineEmits(['update:modelValue'])
@@ -45,17 +54,16 @@ const open = ref(false)
 const wrapper = ref(null)
 
 const selectedItems = computed(() =>
-  props.options.filter(o => props.modelValue.includes(o.id))
+  props.options.filter((o) => props.modelValue.includes(o.id)),
 )
+
+function toggleOpen() { open.value = !open.value }
 
 function toggle(id) {
   const current = [...props.modelValue]
   const idx = current.indexOf(id)
-  if (idx >= 0) {
-    current.splice(idx, 1)
-  } else {
-    current.push(id)
-  }
+  if (idx >= 0) current.splice(idx, 1)
+  else current.push(id)
   emit('update:modelValue', current)
 }
 
@@ -69,76 +77,143 @@ onMounted(() => document.addEventListener('click', onClickOutside))
 onUnmounted(() => document.removeEventListener('click', onClickOutside))
 </script>
 
-<style scoped>
-.multi-select {
+<style scoped lang="scss">
+.sb-multi {
   position: relative;
+  font-family: var(--sb-serif);
 }
 
-.multi-select-trigger {
-  cursor: pointer;
-  min-height: 31px;
-  padding: 0.2rem 0.5rem;
-}
-
-.multi-tag {
-  display: inline-flex;
+.trigger {
+  display: flex;
   align-items: center;
-  gap: 0.25rem;
-  background: var(--bs-primary);
-  color: #fff;
-  border-radius: 0.35rem;
-  padding: 0.1rem 0.45rem;
-  font-size: 0.75rem;
-  font-weight: 500;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-height: 40px;
+  padding: 6px 30px 6px 10px;
+  background: oklch(0.97 0.018 82);
+  border: 1.4px solid rgba(40, 30, 20, 0.18);
+  border-radius: 3px;
+  font-family: var(--sb-serif);
+  font-size: 15px;
+  color: var(--sb-ink);
+  cursor: pointer;
+  position: relative;
+  box-shadow: inset 0 1px 2px rgba(40, 30, 20, 0.04);
+  outline: none;
+
+  &:focus-visible,
+  &.open {
+    border-color: var(--sb-terracotta);
+    box-shadow: 0 0 0 2px oklch(0.55 0.14 30 / 0.15);
+    background: #fdfcf7;
+  }
+}
+
+.ph {
+  font-style: italic;
+  color: var(--sb-ink-mute);
+  flex: 1;
   line-height: 1.4;
 }
 
-.multi-tag-remove {
-  cursor: pointer;
-  font-size: 0.9rem;
+.caret {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--sb-ink-mute);
+  font-size: 12px;
+  pointer-events: none;
   line-height: 1;
-  opacity: 0.8;
 }
-.multi-tag-remove:hover {
-  opacity: 1;
+.trigger.open .caret { color: var(--sb-terracotta); }
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: transparent;
+  border: 1.4px solid var(--sb-terracotta);
+  color: var(--sb-terracotta);
+  border-radius: 999px;
+  padding: 2px 6px 2px 10px;
+  font-family: var(--sb-serif);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  line-height: 1.4;
+  box-shadow: inset 0 0 0 0.5px rgba(140, 60, 30, 0.2);
+  white-space: nowrap;
+}
+.chip-x {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  font-size: 14px;
+  font-weight: 400;
+  text-transform: none;
+  line-height: 1;
+  cursor: pointer;
+  &:hover {
+    background: var(--sb-terracotta);
+    color: #fff;
+  }
 }
 
-.multi-select-dropdown {
+.dropdown {
   position: absolute;
-  top: 100%;
+  top: calc(100% + 4px);
   left: 0;
   right: 0;
   z-index: 100;
-  background: #fff;
-  border: 1px solid #e0ddd9;
-  border-radius: 0.5rem;
-  margin-top: 0.25rem;
-  max-height: 200px;
+  background: #fdfcf7;
+  border: 1px solid rgba(40, 30, 20, 0.18);
+  border-radius: 3px;
+  max-height: 220px;
   overflow-y: auto;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  box-shadow:
+    0 1px 1px rgba(40, 30, 20, 0.06),
+    0 6px 18px rgba(40, 30, 20, 0.18);
 }
 
-.multi-select-option {
+.opt {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  padding: 0.4rem 0.75rem;
+  gap: 8px;
+  padding: 8px 12px;
   cursor: pointer;
-  font-size: 0.85rem;
-  transition: background 0.15s;
-}
-.multi-select-option:hover {
-  background: #f5f3f1;
-}
-.multi-select-option.active {
-  background: #fef3ef;
-  font-weight: 500;
+  font-family: var(--sb-serif);
+  font-size: 15px;
+  color: var(--sb-ink);
+  border-bottom: 1px dashed rgba(40, 30, 20, 0.1);
+  transition: background 0.12s;
+
+  &:last-child { border-bottom: none; }
+  &:hover { background: oklch(0.94 0.05 85 / 0.5); }
+  &.active {
+    background: oklch(0.94 0.05 85 / 0.7);
+    font-weight: 500;
+  }
 }
 
-.multi-check {
-  width: 1.1rem;
+.check {
+  width: 16px;
   text-align: center;
-  color: var(--bs-primary);
-  font-weight: 700;
+  font-family: var(--sb-hand);
+  font-size: 18px;
+  color: var(--sb-terracotta);
+  line-height: 1;
+}
+
+.empty {
+  padding: 10px 12px;
+  font-family: var(--sb-hand);
+  font-size: 16px;
+  color: var(--sb-ink-mute);
+  text-align: center;
 }
 </style>

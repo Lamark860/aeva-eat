@@ -48,8 +48,9 @@ type Place struct {
 }
 
 type Reviewer struct {
-	ID       int    `json:"id"`
-	Username string `json:"username"`
+	ID        int     `json:"id"`
+	Username  string  `json:"username"`
+	AvatarURL *string `json:"avatar_url,omitempty"`
 }
 
 type Review struct {

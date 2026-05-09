@@ -1,6 +1,6 @@
 <template>
-  <div>
-    <nav class="navbar navbar-expand-md navbar-light">
+  <div :class="{ 'is-scrapbook': isScrapbook }">
+    <nav v-if="!isScrapbook" class="navbar navbar-expand-md navbar-light">
       <div class="container">
         <router-link class="navbar-brand d-flex align-items-center gap-2" to="/">
           <span class="brand-icon">🍽</span> AEVA Eat
@@ -39,7 +39,7 @@
       </div>
     </nav>
 
-    <main class="container-fluid container-lg py-4 main-content">
+    <main :class="isScrapbook ? 'sb-main' : 'container-fluid container-lg py-4 main-content'">
       <router-view v-slot="{ Component }">
         <transition name="page" mode="out-in">
           <component :is="Component" />
@@ -51,7 +51,7 @@
 
     <BottomTabBar />
 
-    <footer class="app-footer text-center text-muted py-3 mt-4 d-none d-md-block">
+    <footer v-if="!isScrapbook" class="app-footer text-center text-muted py-3 mt-4 d-none d-md-block">
       <small>
         Картографические данные предоставлены
         <a href="https://yandex.ru/legal/maps_termsofuse/" target="_blank" rel="noopener">Яндекс Картами</a>
@@ -61,15 +61,21 @@
 </template>
 
 <script setup>
+import { computed } from 'vue'
 import { useAuthStore } from './stores/auth'
 import { useWishlistStore } from './stores/wishlist'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import ToastContainer from './components/ToastContainer.vue'
 import BottomTabBar from './components/BottomTabBar.vue'
 
 const auth = useAuthStore()
 const wishlist = useWishlistStore()
 const router = useRouter()
+const route = useRoute()
+
+// Scrapbook routes own their own chrome (wordmark / paper bg / scrapbook tabbar)
+// — hide the global Bootstrap navbar/footer on those routes.
+const isScrapbook = computed(() => !!route.meta.scrapbook)
 
 auth.init()
 if (auth.isAuthenticated) {
@@ -83,6 +89,12 @@ function logout() {
 </script>
 
 <style scoped>
+.sb-main {
+  /* Scrapbook screens render edge-to-edge — no Bootstrap container padding. */
+  padding: 0;
+  margin: 0;
+}
+
 .avatar-sm {
   display: inline-flex;
   align-items: center;

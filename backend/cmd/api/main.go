@@ -161,6 +161,7 @@ func runMigrations(db *sql.DB) error {
 		"migrations/008_place_unique.up.sql",
 		"migrations/009_invites_roles.up.sql",
 		"migrations/010_review_video.up.sql",
+		"migrations/011_dict_extensions.up.sql",
 		"migrations/005_seed_data.up.sql",
 	}
 	for _, f := range files {

@@ -1,24 +1,23 @@
 <template>
-  <div class="rating-slider">
-    <div class="d-flex align-items-center justify-content-between mb-1">
-      <span class="rating-label">{{ label }}</span>
-      <span class="rating-value" :style="{ color: fillColor }">{{ modelValue !== null && modelValue !== undefined ? Number(modelValue).toFixed(1) : '–' }}</span>
+  <div class="sb-rating" :data-tone="tone">
+    <div class="head">
+      <span class="lbl">{{ label }}</span>
+      <span class="val">{{ display }}</span>
     </div>
-    <div class="slider-track-wrap" @click="onTrackClick" ref="trackEl">
-      <div class="slider-track">
-        <div class="slider-fill" :style="{ width: fillPercent + '%', background: fillColor }"></div>
-      </div>
+    <div class="track-wrap">
+      <div class="track-line"></div>
+      <div class="track-fill" :style="{ width: fillPercent + '%' }"></div>
       <input
         type="range"
         min="0"
         max="10"
         step="0.1"
         :value="modelValue"
-        class="slider-input"
+        class="track-input"
         @input="$emit('update:modelValue', parseFloat($event.target.value))"
       />
     </div>
-    <div class="d-flex justify-content-between text-muted" style="font-size: 0.65rem;">
+    <div class="ticks">
       <span>0</span>
       <span>5</span>
       <span>10</span>
@@ -27,66 +26,79 @@
 </template>
 
 <script setup>
-import { computed, ref } from 'vue'
+import { computed } from 'vue'
 
 const props = defineProps({
   modelValue: { type: Number, default: 0 },
-  label: { type: String, default: '' },
-  color: { type: String, default: '#f59e0b' }
+  label:      { type: String, default: '' },
+  /* tone determines the fill color: terra (default), ochre, moss, plum */
+  tone:       { type: String, default: 'terra' },
 })
 
 defineEmits(['update:modelValue'])
 
-const trackEl = ref(null)
+const fillPercent = computed(() => (props.modelValue ? (props.modelValue / 10) * 100 : 0))
 
-const fillPercent = computed(() => props.modelValue ? (props.modelValue / 10) * 100 : 0)
-const fillColor = computed(() => props.color)
-
-function onTrackClick(e) {
-  // handled by range input
-}
+const display = computed(() => {
+  const v = props.modelValue
+  if (v === null || v === undefined || v === 0) return '–'
+  return Number(v).toFixed(1)
+})
 </script>
 
-<style scoped>
-.rating-slider {
-  margin-bottom: 0.25rem;
+<style scoped lang="scss">
+.sb-rating {
+  margin-bottom: 6px;
 }
 
-.rating-label {
-  font-size: 0.85rem;
+.head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 2px;
+}
+.lbl {
+  font-family: var(--sb-serif);
+  font-style: italic;
   font-weight: 500;
-  color: #666;
+  font-size: 14px;
+  color: var(--sb-ink);
+}
+.val {
+  font-family: var(--sb-hand);
+  font-size: 22px;
+  line-height: 1;
+  color: var(--sb-ink);
 }
 
-.rating-value {
-  font-size: 1.1rem;
-  font-weight: 700;
-}
-
-.slider-track-wrap {
+.track-wrap {
   position: relative;
   height: 32px;
   display: flex;
   align-items: center;
 }
 
-.slider-track {
+/* Thin ink line as the track */
+.track-line {
   position: absolute;
-  left: 0; right: 0;
-  height: 6px;
-  background: #e8e6e3;
-  border-radius: 3px;
-  overflow: hidden;
+  left: 0;
+  right: 0;
+  height: 1.5px;
+  background: rgba(40, 30, 20, 0.35);
+  border-radius: 1px;
   pointer-events: none;
 }
-
-.slider-fill {
-  height: 100%;
-  border-radius: 3px;
+.track-fill {
+  position: absolute;
+  left: 0;
+  height: 2.5px;
+  background: var(--fill-color);
+  border-radius: 2px;
+  pointer-events: none;
   transition: width 0.15s ease;
 }
 
-.slider-input {
+.track-input {
   -webkit-appearance: none;
   appearance: none;
   width: 100%;
@@ -98,27 +110,51 @@ function onTrackClick(e) {
   margin: 0;
 }
 
-.slider-input::-webkit-slider-thumb {
+/* Thumb — pushpin head */
+.track-input::-webkit-slider-thumb {
   -webkit-appearance: none;
-  width: 20px;
-  height: 20px;
+  width: 18px;
+  height: 18px;
   border-radius: 50%;
-  background: #fff;
-  box-shadow: 0 1px 4px rgba(0,0,0,0.2), 0 0 0 2px v-bind(fillColor);
+  background: radial-gradient(circle at 35% 30%, oklch(0.7 0.16 25), oklch(0.42 0.18 25));
+  box-shadow:
+    inset 0 -1px 1px rgba(0, 0, 0, 0.3),
+    inset 0 1px 1px rgba(255, 255, 255, 0.3),
+    0 1px 2px rgba(40, 15, 5, 0.3),
+    0 0 0 3px #fdfcf7;
   cursor: pointer;
   transition: transform 0.15s;
 }
-.slider-input::-webkit-slider-thumb:hover {
-  transform: scale(1.15);
+.track-input::-webkit-slider-thumb:hover {
+  transform: scale(1.12);
 }
-
-.slider-input::-moz-range-thumb {
-  width: 20px;
-  height: 20px;
+.track-input::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
   border-radius: 50%;
-  background: #fff;
-  box-shadow: 0 1px 4px rgba(0,0,0,0.2), 0 0 0 2px v-bind(fillColor);
+  background: radial-gradient(circle at 35% 30%, oklch(0.7 0.16 25), oklch(0.42 0.18 25));
+  box-shadow:
+    inset 0 -1px 1px rgba(0, 0, 0, 0.3),
+    inset 0 1px 1px rgba(255, 255, 255, 0.3),
+    0 1px 2px rgba(40, 15, 5, 0.3),
+    0 0 0 3px #fdfcf7;
   border: none;
   cursor: pointer;
 }
+
+.ticks {
+  display: flex;
+  justify-content: space-between;
+  font-family: var(--sb-hand);
+  font-size: 13px;
+  color: var(--sb-ink-mute);
+  line-height: 1;
+  margin-top: -2px;
+}
+
+/* Tone-driven fill colours via CSS var so we don't repeat selectors */
+.sb-rating { --fill-color: var(--sb-terracotta); }
+.sb-rating[data-tone='ochre'] { --fill-color: var(--sb-ochre); }
+.sb-rating[data-tone='moss']  { --fill-color: var(--sb-moss); }
+.sb-rating[data-tone='plum']  { --fill-color: var(--sb-plum); }
 </style>
