@@ -191,6 +191,12 @@ type FeedEvent struct {
 	// к конкретному отзыву нужна, чтобы кружок показывался только на той
 	// карточке, где видео реально было; иначе бы расширялись все визиты места.
 	VideoURL *string `json:"video_url,omitempty"`
+	// Per-review ratings — фронт усредняет внутри группы (place_id, day)
+	// и ставит как avg_food/service/vibe на конкретную карточку. Иначе
+	// все визиты места показывают один и тот же place-aggregate.
+	FoodRating    *float64 `json:"food_rating,omitempty"`
+	ServiceRating *float64 `json:"service_rating,omitempty"`
+	VibeRating    *float64 `json:"vibe_rating,omitempty"`
 }
 
 // CityAggregate — строка для /api/cities: имя города + счётчики мест,

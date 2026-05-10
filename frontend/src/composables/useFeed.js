@@ -131,19 +131,32 @@ export function useFeed() {
           _date: new Date(ev.occurred_at),
           _attendeeIds: new Set(),
           _videos: [],
+          _foodSum: 0, _serviceSum: 0, _vibeSum: 0, _ratingCount: 0,
           id: `${ev.place_id}-${day}`,
           _placeId: ev.place_id,
           ...place,
-          // override: per-event-grouped поля. Видео приходят из событий,
-          // не с уровня места — иначе все визиты в место с любым видео
-          // получат full-width.
+          // override: per-event-grouped поля. Видео и рейтинги — из событий,
+          // не place-уровня. Иначе все визиты места показывали бы
+          // одинаковую общую оценку и любой видео-флаг расширял всех.
           videos: undefined,
           video_url: undefined,
+          avg_food: undefined,
+          avg_service: undefined,
+          avg_vibe: undefined,
+          // created_at заменим ниже на дату самой ранней встречи в группе —
+          // нужно для caption'а «Place · вс/сб» в ArtifactCard.
+          created_at: undefined,
         }
         reviewGroups.set(key, g)
       }
       for (const id of (ev.attendees || [])) g._attendeeIds.add(id)
       if (ev.video_url) g._videos.push(ev.video_url)
+      if (ev.food_rating != null) {
+        g._foodSum    += ev.food_rating
+        g._serviceSum += ev.service_rating ?? 0
+        g._vibeSum    += ev.vibe_rating    ?? 0
+        g._ratingCount += 1
+      }
       // _date: берём самое раннее событие дня — карточка датируется началом визита
       const d = new Date(ev.occurred_at)
       if (d < g._date) g._date = d
@@ -154,8 +167,20 @@ export function useFeed() {
         .map(id => userMap.get(id))
         .filter(Boolean)
       g.videos = g._videos
+      // Усредняем оценки внутри группы (на случай нескольких отзывов в один день).
+      if (g._ratingCount > 0) {
+        g.avg_food    = +(g._foodSum    / g._ratingCount).toFixed(1)
+        g.avg_service = +(g._serviceSum / g._ratingCount).toFixed(1)
+        g.avg_vibe    = +(g._vibeSum    / g._ratingCount).toFixed(1)
+        g.review_count = g._ratingCount
+      }
+      g.created_at = g._date.toISOString()
       delete g._videos
       delete g._attendeeIds
+      delete g._foodSum
+      delete g._serviceSum
+      delete g._vibeSum
+      delete g._ratingCount
       out.push(g)
     }
 

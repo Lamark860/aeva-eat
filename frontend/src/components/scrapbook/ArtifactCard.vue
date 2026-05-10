@@ -538,39 +538,46 @@ const metaLine = computed(() => {
 }
 
 /* ▶ — полупрозрачный тёмный диск + белый треугольник по центру.
-   Через ::before (диск) и ::after (треугольник через border-trick).
-   .playing класс прячет оверлей, пока видео идёт. */
+   Оба pseudo абсолютно позиционированы и центрированы через
+   top/left 50% + отрицательный margin (надёжнее flex'а — flex рвался
+   когда ::before выходил из потока). .playing прячет оверлей. */
 .art-kruzhok-play {
   position: absolute;
   inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
   pointer-events: none;
   transition: opacity 180ms ease;
-
-  &::before {
-    content: '';
-    position: absolute;
-    width: 28px;
-    height: 28px;
-    border-radius: 50%;
-    background: rgba(20, 12, 6, 0.55);
-    backdrop-filter: blur(2px);
-    -webkit-backdrop-filter: blur(2px);
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
-  }
-  &::after {
-    content: '';
-    position: relative;
-    width: 0;
-    height: 0;
-    border-style: solid;
-    border-width: 5px 0 5px 8px;
-    border-color: transparent transparent transparent #fff;
-    margin-left: 2px;        /* оптический центр треугольника */
-    filter: drop-shadow(0 1px 0.5px rgba(0, 0, 0, 0.25));
-  }
+  z-index: 2;
+}
+.art-kruzhok-play::before,
+.art-kruzhok-play::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+}
+.art-kruzhok-play::before {
+  width: 28px;
+  height: 28px;
+  margin: -14px 0 0 -14px;
+  border-radius: 50%;
+  background: rgba(20, 12, 6, 0.55);
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+}
+.art-kruzhok-play::after {
+  width: 0;
+  height: 0;
+  /* border-trick: 5px 0 5px 8px = равнобедренный треугольник остриём вправо */
+  border-style: solid;
+  border-width: 5px 0 5px 8px;
+  border-color: transparent transparent transparent #fff;
+  /* центрируем оптический центр треугольника, а не bounding-box.
+     Высота 10px → -5px по вертикали. Ширина 8px, но визуально центр
+     треугольника смещён к острию — двигаем чуть-чуть вправо чтобы
+     не выглядело сбитым влево. */
+  margin: -5px 0 0 -3px;
+  filter: drop-shadow(0 1px 0.5px rgba(0, 0, 0, 0.25));
 }
 .art-kruzhok-layer.playing .art-kruzhok-play { opacity: 0; }
 .art-kruzhok-extra {
@@ -585,7 +592,8 @@ const metaLine = computed(() => {
 }
 
 /* На full-width-ячейке кружочки крупнее — пропорционально под full-width.
-   Диск-плеер тоже растёт чтобы оставаться читаемым. */
+   Диск-плеер тоже растёт чтобы оставаться читаемым; центрирующий margin
+   обновляется под новые размеры. */
 .sb-artifact.has-kruzhok {
   .art-kruzhoki { width: 80px; }
   .art-kruzhok-layer {
@@ -596,9 +604,11 @@ const metaLine = computed(() => {
   .art-kruzhok-play::before {
     width: 32px;
     height: 32px;
+    margin: -16px 0 0 -16px;
   }
   .art-kruzhok-play::after {
     border-width: 6px 0 6px 9px;
+    margin: -6px 0 0 -3.5px;
   }
 }
 </style>
