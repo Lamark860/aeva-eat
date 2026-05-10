@@ -535,6 +535,10 @@ const metaLine = computed(() => {
   height: 100%;
   object-fit: cover;
   display: block;
+  /* Chrome/WebKit при `transform` на родителе с overflow:hidden + border-radius
+     иногда не клипает <video> — он торчит квадратом. Клипаем само видео
+     border-radius'ом — это работает независимо от рендер-режима родителя. */
+  border-radius: 50%;
 }
 
 /* ▶ — полупрозрачный тёмный диск + белый треугольник по центру.
