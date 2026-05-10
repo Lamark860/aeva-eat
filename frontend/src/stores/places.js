@@ -16,14 +16,29 @@ export const usePlacesStore = defineStore('places', () => {
     min_rating: '',
     is_gem: false,
     search: '',
-    sort: ''
+    sort: '',
+    // Q5 — расширенные фильтры. attended_by — id-шники друзей через запятую
+    // (multi-select drawer), visit_from/to — ISO-даты «с/по» (preset-чипы
+    // конвертируются в эти даты при выборе).
+    attended_by: [],
+    visit_from: '',
+    visit_to: '',
   })
+
+  // Маппинг полей фронта → query-параметров бэка. Бэк ожидает singular-имена
+  // у multi-фильтров (cuisine_type_id, category_id, attended_by) — это разнобой
+  // намеренный, оставлено по совместимости.
+  const PARAM_MAP = {
+    cuisine_type_ids: 'cuisine_type_id',
+    category_ids:     'category_id',
+    attended_by:      'attended_by',
+  }
 
   function _buildParams() {
     const params = {}
     Object.entries(filters.value).forEach(([key, val]) => {
       if (Array.isArray(val)) {
-        if (val.length > 0) params[key === 'cuisine_type_ids' ? 'cuisine_type_id' : key === 'category_ids' ? 'category_id' : key] = val.join(',')
+        if (val.length > 0) params[PARAM_MAP[key] || key] = val.join(',')
       } else if (val !== '' && val !== false && val !== null) {
         params[key] = val
       }

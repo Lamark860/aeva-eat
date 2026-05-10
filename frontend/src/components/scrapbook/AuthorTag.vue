@@ -51,7 +51,7 @@ const positionStyle = computed(() => {
    image fill here so consumers don't need to know whether avatar exists. */
 .sb-author-tag.has-photo {
   /* Drop the colored fill so the image shows through cleanly. */
-  background: #fdfcf7;
+  background: var(--sb-paper-card);
   overflow: hidden;
 }
 .sb-author-tag .ph {

@@ -105,7 +105,7 @@ onUnmounted(() => document.removeEventListener('click', onClickOutside))
   &.open {
     border-color: var(--sb-terracotta);
     box-shadow: 0 0 0 2px oklch(0.55 0.14 30 / 0.15);
-    background: #fdfcf7;
+    background: var(--sb-paper-card);
   }
 }
 
@@ -160,7 +160,7 @@ onUnmounted(() => document.removeEventListener('click', onClickOutside))
   cursor: pointer;
   &:hover {
     background: var(--sb-terracotta);
-    color: #fff;
+    color: var(--sb-on-accent);
   }
 }
 
@@ -170,7 +170,7 @@ onUnmounted(() => document.removeEventListener('click', onClickOutside))
   left: 0;
   right: 0;
   z-index: 100;
-  background: #fdfcf7;
+  background: var(--sb-paper-card);
   border: 1px solid rgba(40, 30, 20, 0.18);
   border-radius: 3px;
   max-height: 220px;

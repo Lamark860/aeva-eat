@@ -70,7 +70,7 @@ const dateLabel = computed(() => {
   justify-content: center;
   /* «Скрапбук-обводка» как у VideoKruzhok — paper ring + soft shadow. */
   box-shadow:
-    0 0 0 3px #fdfcf7,
+    0 0 0 3px var(--sb-paper-card),
     0 2px 4px rgba(40, 30, 20, 0.18),
     0 6px 14px rgba(40, 30, 20, 0.16);
   transition: transform 200ms ease;
@@ -80,7 +80,7 @@ const dateLabel = computed(() => {
 }
 
 .play {
-  color: #fdfcf7;
+  color: var(--sb-paper-card);
   font-size: 18px;
   line-height: 1;
   transform: translateX(1px);

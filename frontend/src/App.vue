@@ -117,7 +117,7 @@ function logout() {
   height: 28px;
   border-radius: 50%;
   background: var(--bs-primary);
-  color: #fff;
+  color: var(--sb-on-accent);
   font-weight: 700;
   font-size: 0.8rem;
 }

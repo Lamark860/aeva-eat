@@ -249,7 +249,7 @@ onBeforeUnmount(() => {
   position: relative;
   background: #000;
   box-shadow:
-    0 0 0 3px #fdfcf7,
+    0 0 0 3px var(--sb-paper-card),
     0 2px 4px rgba(40, 30, 20, 0.18),
     0 8px 18px rgba(40, 30, 20, 0.18);
   align-self: center;
@@ -259,7 +259,7 @@ onBeforeUnmount(() => {
   }
   &.recording {
     box-shadow:
-      0 0 0 3px #fdfcf7,
+      0 0 0 3px var(--sb-paper-card),
       0 0 0 5px var(--sb-terracotta),
       0 2px 4px rgba(40, 30, 20, 0.18),
       0 8px 18px rgba(40, 30, 20, 0.18);
@@ -292,7 +292,7 @@ onBeforeUnmount(() => {
   left: 50%;
   transform: translateX(-50%);
   background: rgba(40, 30, 20, 0.65);
-  color: #fff;
+  color: var(--sb-on-accent);
   padding: 3px 10px;
   border-radius: 999px;
   font-family: var(--sb-serif);
@@ -341,7 +341,7 @@ onBeforeUnmount(() => {
 }
 .btn-rec {
   background: var(--sb-terracotta);
-  color: #fff;
+  color: var(--sb-on-accent);
   box-shadow: 0 1px 1px rgba(140, 60, 30, 0.2), 0 3px 8px rgba(140, 60, 30, 0.25);
   &:hover:not(:disabled) { background: oklch(0.55 0.14 30); }
 }
@@ -361,19 +361,19 @@ onBeforeUnmount(() => {
 }
 .btn-apply {
   background: var(--sb-terracotta);
-  color: #fff;
+  color: var(--sb-on-accent);
   box-shadow: 0 1px 1px rgba(140, 60, 30, 0.2), 0 3px 8px rgba(140, 60, 30, 0.25);
   &:hover:not(:disabled) { background: oklch(0.55 0.14 30); }
 }
 
 @keyframes sb-rec-ring {
   0%, 100% { box-shadow:
-    0 0 0 3px #fdfcf7,
+    0 0 0 3px var(--sb-paper-card),
     0 0 0 5px var(--sb-terracotta),
     0 2px 4px rgba(40, 30, 20, 0.18),
     0 8px 18px rgba(40, 30, 20, 0.18); }
   50% { box-shadow:
-    0 0 0 3px #fdfcf7,
+    0 0 0 3px var(--sb-paper-card),
     0 0 0 7px oklch(0.7 0.16 25 / 0.6),
     0 2px 4px rgba(40, 30, 20, 0.18),
     0 8px 18px rgba(40, 30, 20, 0.18); }

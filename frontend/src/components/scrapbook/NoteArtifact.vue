@@ -102,7 +102,7 @@ const dateLabel = computed(() => {
   height: 22px;
 }
 .na-head .r-tag.has-photo {
-  background: #fdfcf7;
+  background: var(--sb-paper-card);
   overflow: hidden;
 }
 .na-head .r-ph {
@@ -166,8 +166,8 @@ const dateLabel = computed(() => {
   height: 22px;
   border-radius: 50%;
   background: var(--sb-ink);
-  color: #fdfcf7;
-  border: 2px solid #fdfcf7;
+  color: var(--sb-paper-card);
+  border: 2px solid var(--sb-paper-card);
   font-family: var(--sb-serif);
   font-size: 14px;
   line-height: 1;

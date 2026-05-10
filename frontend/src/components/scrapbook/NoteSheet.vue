@@ -122,7 +122,7 @@ async function submit() {
     border-color: var(--sb-terracotta);
     outline: none;
     box-shadow: 0 0 0 2px oklch(0.55 0.14 30 / 0.15);
-    background: #fdfcf7;
+    background: var(--sb-paper-card);
   }
   &::placeholder {
     color: var(--sb-ink-mute);
@@ -146,7 +146,7 @@ textarea.ns-text {
 }
 .btn-apply {
   background: var(--sb-terracotta);
-  color: #fff;
+  color: var(--sb-on-accent);
   border: none;
   border-radius: 999px;
   padding: 12px 22px;
@@ -156,7 +156,7 @@ textarea.ns-text {
   cursor: pointer;
   flex: 1;
   &:disabled { opacity: 0.5; cursor: not-allowed; }
-  &:hover:not(:disabled) { background: oklch(0.55 0.14 30); color: #fff; }
+  &:hover:not(:disabled) { background: oklch(0.55 0.14 30); color: var(--sb-on-accent); }
 }
 .cancel-link {
   background: transparent;

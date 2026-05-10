@@ -30,7 +30,7 @@ const C = {
   moss:       '#7c9b6a',
   mossDark:   '#3f5c30',
   ink:        '#2d231b',
-  paper:      '#fdfcf7',
+  paper:      'var(--sb-paper-card)',
   highlight:  'rgba(255,255,255,0.45)',
 }
 
@@ -127,7 +127,7 @@ function gemSVG(id, rating) {
 function buildBalloonContent(place, avgRating) {
   // All inline styles — Yandex balloon strips classes, so we can't rely on stylesheet.
   const cover = place.image_url
-    ? `<div style="background:#fdfcf7;padding:6px 6px 22px;margin:0 0 8px;box-shadow:0 1px 1px rgba(40,30,20,.08),0 4px 10px rgba(40,30,20,.10);border-radius:1px;display:inline-block;transform:rotate(-1.5deg);position:relative">
+    ? `<div style="background:var(--sb-paper-card);padding:6px 6px 22px;margin:0 0 8px;box-shadow:0 1px 1px rgba(40,30,20,.08),0 4px 10px rgba(40,30,20,.10);border-radius:1px;display:inline-block;transform:rotate(-1.5deg);position:relative">
          <img src="${place.image_url}" style="display:block;width:160px;height:110px;object-fit:cover;border-radius:1px" />
          <div style="position:absolute;left:0;right:0;bottom:4px;text-align:center;font-family:Caveat,cursive;font-size:14px;color:#5a4a3c;line-height:1">${escapeHtml(place.name)}</div>
        </div>`
@@ -171,8 +171,8 @@ function buildBalloonContent(place, avgRating) {
            const inner = r.avatar_url
              ? `<img src="${r.avatar_url}" alt="" style="width:100%;height:100%;object-fit:cover;display:block" />`
              : initial
-           const bg = r.avatar_url ? '#fdfcf7' : tone.bg
-           return `<span title="${escapeHtml(r.username || '')}" style="display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;background:${bg};color:${tone.ink};font-family:Lora,Georgia,serif;font-weight:600;font-size:10px;box-shadow:0 0 0 2px #fdfcf7,0 1px 2px rgba(40,30,20,.25);margin-left:${i === 0 ? '0' : '-6px'};overflow:hidden">${inner}</span>`
+           const bg = r.avatar_url ? 'var(--sb-paper-card)' : tone.bg
+           return `<span title="${escapeHtml(r.username || '')}" style="display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;background:${bg};color:${tone.ink};font-family:Lora,Georgia,serif;font-weight:600;font-size:10px;box-shadow:0 0 0 2px var(--sb-paper-card),0 1px 2px rgba(40,30,20,.25);margin-left:${i === 0 ? '0' : '-6px'};overflow:hidden">${inner}</span>`
          }).join('')}
        </div>`
     : ''

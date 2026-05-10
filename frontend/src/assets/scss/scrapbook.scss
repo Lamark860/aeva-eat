@@ -5,13 +5,20 @@
 // =============================================
 
 :root {
+  // Lock to light scheme — dark theme is post-MVP (DESIGN-DECISIONS Q9).
+  // Without this, Safari/Chrome auto-darken form controls and scrollbars on
+  // OS dark mode, which clashes with the paper aesthetic.
+  color-scheme: light;
+
   // paper + ink
   --sb-paper:        oklch(0.965 0.018 82);
   --sb-paper-deep:   oklch(0.93 0.022 82);
   --sb-paper-edge:   oklch(0.88 0.03 82);
+  --sb-paper-card:   #fdfcf7;                  // off-white polaroid/sheet card
   --sb-ink:          oklch(0.22 0.02 60);
   --sb-ink-soft:     oklch(0.42 0.02 60);
   --sb-ink-mute:     oklch(0.6 0.015 60);
+  --sb-on-accent:    #fff;                     // text on terracotta/dark buttons
 
   // accents
   --sb-terracotta:   oklch(0.58 0.14 30);
@@ -84,7 +91,7 @@
 // Polaroid
 // =============================================
 .sb-polaroid {
-  background: #fdfcf7;
+  background: var(--sb-paper-card);
   padding: 8px 8px 36px;
   box-shadow:
     0 1px 1px rgba(40, 30, 20, 0.08),
@@ -131,7 +138,7 @@
 .sb-polaroid.gem-frame {
   padding: 10px 10px 38px;
   background:
-    linear-gradient(#fdfcf7, #fdfcf7) padding-box,
+    linear-gradient(var(--sb-paper-card), var(--sb-paper-card)) padding-box,
     repeating-linear-gradient(45deg, oklch(0.55 0.14 30 / 0.7) 0 4px, oklch(0.66 0.13 85 / 0.7) 4px 8px) border-box;
   border: 2px solid transparent;
 }
@@ -305,7 +312,7 @@
   font-size: 10px;
   color: var(--sb-ink);
   box-shadow:
-    0 0 0 2px #fdfcf7,
+    0 0 0 2px var(--sb-paper-card),
     0 1px 2px rgba(40, 30, 20, 0.25);
   z-index: 3;
   background: var(--sb-paper-deep);
@@ -328,7 +335,7 @@
   align-items: center;
   justify-content: center;
   box-shadow:
-    0 0 0 3px #fdfcf7,
+    0 0 0 3px var(--sb-paper-card),
     0 2px 4px rgba(40, 30, 20, 0.18),
     0 8px 18px rgba(40, 30, 20, 0.18);
   position: relative;
@@ -346,7 +353,7 @@
     position: absolute;
     bottom: 2px;
     background: rgba(0, 0, 0, 0.5);
-    color: #fff;
+    color: var(--sb-on-accent);
     font-family: var(--sb-serif);
     font-size: 9.5px;
     letter-spacing: 0.04em;
@@ -649,7 +656,7 @@
     align-items: center;
     gap: 12px;
     width: 100%;
-    background: #fdfcf7;
+    background: var(--sb-paper-card);
     border: none;
     box-shadow: 0 1px 1px rgba(40, 30, 20, 0.06), 0 2px 6px rgba(40, 30, 20, 0.08);
     border-radius: 10px;

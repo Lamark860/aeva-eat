@@ -163,7 +163,7 @@ function formatDate(dateStr) {
 
 <style scoped lang="scss">
 .sb-review {
-  background: #fdfcf7;
+  background: var(--sb-paper-card);
   margin: 0 0 22px;
   padding: 14px 14px 18px;
   position: relative;
@@ -322,7 +322,7 @@ function formatDate(dateStr) {
   background: #000;
   cursor: pointer;
   box-shadow:
-    0 0 0 3px #fdfcf7,
+    0 0 0 3px var(--sb-paper-card),
     0 2px 4px rgba(40, 30, 20, 0.18),
     0 8px 18px rgba(40, 30, 20, 0.18);
 }
@@ -338,7 +338,7 @@ function formatDate(dateStr) {
   align-items: center;
   justify-content: center;
   background: rgba(0, 0, 0, 0.3);
-  color: #fff;
+  color: var(--sb-on-accent);
   font-size: 2rem;
 }
 

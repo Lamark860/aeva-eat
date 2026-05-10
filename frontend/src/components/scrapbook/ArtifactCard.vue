@@ -2,7 +2,7 @@
   <router-link
     :to="`/places/${place.id}`"
     class="sb-artifact"
-    :class="{ featured, 'no-photo': isTicketOnly }"
+    :class="{ featured, 'no-photo': isTicketOnly, 'has-kruzhok': hasKruzhok }"
     :aria-label="place.name"
   >
     <!-- A3 — билетик-only артефакт (NEXT.md §A3). Если у места нет ни cover'а,
@@ -84,6 +84,26 @@
           </span>
           <span v-if="extraReviewers > 0" class="r-extra">+{{ extraReviewers }}</span>
         </div>
+
+        <!-- Q-video: кружочек видео внахлёст к полароиду. Карточка с has_video
+             в feed-grid становится full-width (см. .doska-cell.has-video в Home),
+             поэтому кружок не теснит соседей и явно «принадлежит» этому месту.
+             preload=metadata + muted+playsinline — браузер вытаскивает первый
+             кадр без автозапуска; iOS требует и то и другое. -->
+        <span v-if="hasKruzhok" class="art-kruzhok">
+          <video
+            v-if="place.video_url"
+            class="art-kruzhok-video"
+            :src="place.video_url"
+            preload="metadata"
+            muted
+            playsinline
+            disablepictureinpicture
+            aria-hidden="true"
+          ></video>
+          <span v-else class="art-kruzhok-fallback" aria-hidden="true"></span>
+          <span class="art-kruzhok-play" aria-hidden="true">▶</span>
+        </span>
       </div>
 
       <div v-if="hasStack && caption" class="sb-stack-caption">{{ caption }}</div>
@@ -118,6 +138,9 @@ const props = defineProps({
   // и билетик чуть жирнее, AuthorTag-стек крупнее. Раскладку (grid-column:
   // 1/-1) определяет родитель; здесь только визуальный апгрейд карточки.
   featured: { type: Boolean, default: false },
+  // Q4 — если передан, перебивает place.reviewers: показываем только тех,
+  // кто был в этом конкретном визите (event-grouped feed). null = не задано.
+  attendees: { type: Array, default: null },
 })
 
 const placeholderPalette = ['sb-photo-warm', 'sb-photo-olive', 'sb-photo-dusk', 'sb-photo-sage', 'sb-photo-peach', 'sb-photo-brick', 'sb-photo-cream', 'sb-photo-slate', 'sb-photo-indigo']
@@ -144,13 +167,26 @@ const caption = computed(() => {
 })
 
 // Показываем до 4-х аватарок круга. Остальные сворачиваются в caveat-«+N».
+// Q4: если attendees переданы и непустые — рендерим именно их (тех, кто был
+// в этом конкретном визите). Иначе фоллбэк на полный place.reviewers —
+// чтобы при провале резолва /api/users аватарки не исчезли совсем.
 const MAX_REVIEWERS = 4
-const allReviewers = computed(() => props.place.reviewers || [])
+const allReviewers = computed(() => {
+  if (Array.isArray(props.attendees) && props.attendees.length > 0) return props.attendees
+  return props.place.reviewers || []
+})
 const reviewers = computed(() => allReviewers.value.slice(0, MAX_REVIEWERS))
 const extraReviewers = computed(() => Math.max(0, allReviewers.value.length - MAX_REVIEWERS))
 
 const stackPhotos = computed(() => props.place.feed_photos || [])
 const hasStack = computed(() => stackPhotos.value.length >= 2)
+
+// Q-video: рендерим кружок только когда у места есть видео И есть какое-то
+// фото (полароид, к которому он приклеивается). Без фото — билетик-only-карточка
+// без кружочка не теряет смысл, добавлять сюда визуально некуда.
+const hasKruzhok = computed(() =>
+  !!props.place.has_video && !isTicketOnly.value
+)
 
 const hasRatings = computed(() => {
   const p = props.place
@@ -213,12 +249,12 @@ const metaLine = computed(() => {
   margin-left: -8px;
   pointer-events: auto;
   box-shadow:
-    0 0 0 2px #fdfcf7,
+    0 0 0 2px var(--sb-paper-card),
     0 1px 2px rgba(40, 30, 20, 0.18);
 }
 .art-people .r-tag:first-child { margin-left: 0; }
 .art-people .r-tag.has-photo {
-  background: #fdfcf7;
+  background: var(--sb-paper-card);
   overflow: hidden;
 }
 .art-people .r-ph {
@@ -298,7 +334,7 @@ const metaLine = computed(() => {
    штампиком, билетиком-рейтингом и стеком авторов. Без полароида. */
 .art-ticket-card {
   position: relative;
-  background: #fdfcf7;
+  background: var(--sb-paper-card);
   padding: 14px 14px 24px;
   box-shadow:
     0 1px 1px rgba(40, 30, 20, 0.06),
@@ -352,5 +388,63 @@ const metaLine = computed(() => {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* Q-video: кружочек прилипает к нижне-правому углу полароида, чуть заходя
+   на фото. Без сплошной тёмной подложки — внутри живой <video preload=metadata>,
+   браузер вытаскивает первый кадр и показывает его как poster. ▶ маленьким
+   значком сверху, не закрывает картинку. */
+.art-kruzhok {
+  position: absolute;
+  bottom: -22px;
+  right: -14px;
+  z-index: 5;
+  pointer-events: none;        /* клик уходит в parent router-link */
+  display: inline-block;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  overflow: hidden;
+  transform: rotate(-6deg);
+  box-shadow:
+    0 0 0 3px var(--sb-paper-card),
+    0 2px 4px rgba(40, 30, 20, 0.18),
+    0 6px 14px rgba(40, 30, 20, 0.16);
+}
+.art-kruzhok-video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+/* Fallback — на случай video_url ещё нет (старые места до миграции).
+   Текстура paper-card вместо чёрного, чтобы не «прибивать» полароид. */
+.art-kruzhok-fallback {
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: var(--sb-paper-deep);
+  background-image: radial-gradient(circle at 30% 30%,
+    rgba(40, 30, 20, 0.06), transparent 60%);
+}
+.art-kruzhok-play {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  color: rgba(255, 255, 255, 0.92);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.55);
+  line-height: 1;
+}
+
+/* На full-width-ячейке кружочек крупнее — пропорционально под full-width. */
+.sb-artifact.has-kruzhok {
+  .art-kruzhok {
+    width: 72px;
+    height: 72px;
+  }
+  .art-kruzhok-play { font-size: 20px; }
 }
 </style>

@@ -76,7 +76,18 @@
       >
 {{ categoryName(id) }} ×
 </button>
-      <button v-if="placesStore.filters.sort" class="chip" @click="placesStore.filters.sort = ''; fetchFiltered()">
+      <button
+        v-for="id in placesStore.filters.attended_by || []"
+        :key="`att-${id}`"
+        class="chip"
+        @click="toggleAttended(id); fetchFiltered()"
+      >
+{{ friendName(id) }} был · ×
+</button>
+      <button v-if="dateRangeChip" class="chip" @click="clearDateRange">
+        {{ dateRangeChip }} ×
+      </button>
+      <button v-if="placesStore.filters.sort" class="chip" @click="clearSort">
         {{ sortLabel(placesStore.filters.sort) }} ×
       </button>
       <button class="chip reset" @click="resetFilters">сброс</button>
@@ -246,12 +257,85 @@
         </div>
         <div class="mb-3">
           <label class="drawer-label">Сортировка</label>
-          <select v-model="placesStore.filters.sort" class="form-select">
+          <select :value="sortBase" @change="onSortChange" class="form-select">
             <option value="">сначала новые</option>
             <option value="rating">по рейтингу ↓</option>
             <option value="rating_asc">по рейтингу ↑</option>
             <option value="name">по названию</option>
+            <option value="rating_user">по оценке друга</option>
           </select>
+          <select
+            v-if="sortBase === 'rating_user'"
+            v-model="ratingUserId"
+            class="form-select mt-2"
+            @change="onRatingUserChange"
+          >
+            <option value="">— выбери друга —</option>
+            <option v-for="u in friends" :key="u.id" :value="u.id">{{ u.username }}</option>
+          </select>
+        </div>
+
+        <!-- Q5: «кто был» — multi-select аватарок-чипов из друзей круга. -->
+        <div class="mb-3">
+          <label class="drawer-label">Кто был</label>
+          <input
+            v-if="friends.length > 10"
+            v-model="attendedSearch"
+            type="text"
+            class="form-control mb-2"
+            placeholder="поиск имени…"
+          />
+          <div class="att-chips">
+            <button
+              v-for="u in attendedVisible"
+              :key="u.id"
+              type="button"
+              class="att-chip"
+              :class="{ on: placesStore.filters.attended_by.includes(u.id) }"
+              @click="toggleAttended(u.id)"
+            >
+              <span
+                class="r-tag sb-author-tag"
+                :class="[authorColor(u.id), { 'has-photo': !!u.avatar_url }]"
+              >
+                <img v-if="u.avatar_url" :src="u.avatar_url" alt="" class="r-ph" />
+                <template v-else>{{ (u.username || '?').slice(0, 1).toUpperCase() }}</template>
+              </span>
+              <span class="att-name">{{ u.username }}</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Q5: «когда» — paper-control date inputs «с/по» + preset-чипы. -->
+        <div class="mb-3">
+          <label class="drawer-label">Когда</label>
+          <div class="date-row">
+            <input
+              v-model="placesStore.filters.visit_from"
+              type="date"
+              class="form-control"
+              aria-label="с"
+            />
+            <span class="date-sep">—</span>
+            <input
+              v-model="placesStore.filters.visit_to"
+              type="date"
+              class="form-control"
+              aria-label="по"
+            />
+          </div>
+          <div class="preset-chips">
+            <button
+              v-for="p in datePresets"
+              :key="p.key"
+              type="button"
+              class="preset-chip"
+              :class="{ on: activePreset === p.key }"
+              @click="applyDatePreset(p.key)"
+            >
+{{ p.label }}
+</button>
+          </div>
         </div>
         <div class="form-check form-switch mb-3">
           <input
@@ -308,8 +392,105 @@ const activeFilterCount = computed(() => {
   if (f.sort) n++
   if (f.is_gem) n++
   if (f.min_rating) n++
+  if (f.attended_by?.length) n++
+  if (f.visit_from || f.visit_to) n++
   return n
 })
+
+// Q5 — sort распадается на «base» + опционально rating_user-id. Эти computed
+// держат UI в синке с filter.sort: если sort = 'rating_user:5', то sortBase
+// равно 'rating_user', а ratingUserId — '5'.
+const sortBase = computed(() => {
+  const s = placesStore.filters.sort || ''
+  return s.startsWith('rating_user:') ? 'rating_user' : s
+})
+const ratingUserId = ref('')
+function onSortChange(e) {
+  const v = e.target.value
+  if (v === 'rating_user') {
+    placesStore.filters.sort = ratingUserId.value ? `rating_user:${ratingUserId.value}` : 'rating_user'
+  } else {
+    placesStore.filters.sort = v
+    ratingUserId.value = ''
+  }
+  fetchFiltered()
+}
+function onRatingUserChange() {
+  if (ratingUserId.value) {
+    placesStore.filters.sort = `rating_user:${ratingUserId.value}`
+    fetchFiltered()
+  }
+}
+function clearSort() {
+  placesStore.filters.sort = ''
+  ratingUserId.value = ''
+  fetchFiltered()
+}
+
+// Q5 — «кто был» multi-select.
+const attendedSearch = ref('')
+const attendedVisible = computed(() => {
+  const q = attendedSearch.value.trim().toLowerCase()
+  if (!q) return friends.value
+  return friends.value.filter(u => (u.username || '').toLowerCase().includes(q))
+})
+function toggleAttended(id) {
+  const arr = placesStore.filters.attended_by || []
+  placesStore.filters.attended_by = arr.includes(id) ? arr.filter(x => x !== id) : [...arr, id]
+}
+function friendName(id) {
+  return friends.value.find(u => u.id === id)?.username || ''
+}
+
+// Q5 — preset-чипы для «когда». Конвертируются в visit_from / visit_to.
+const datePresets = [
+  { key: 'this-year',    label: 'этот год' },
+  { key: 'prev-year',    label: 'прошлый год' },
+  { key: 'last-30-days', label: 'последние 30 дней' },
+]
+function isoDate(d) { return d.toISOString().slice(0, 10) }
+function applyDatePreset(key) {
+  const now = new Date()
+  if (key === 'this-year') {
+    placesStore.filters.visit_from = `${now.getFullYear()}-01-01`
+    placesStore.filters.visit_to   = `${now.getFullYear()}-12-31`
+  } else if (key === 'prev-year') {
+    const y = now.getFullYear() - 1
+    placesStore.filters.visit_from = `${y}-01-01`
+    placesStore.filters.visit_to   = `${y}-12-31`
+  } else if (key === 'last-30-days') {
+    const from = new Date(now)
+    from.setDate(from.getDate() - 30)
+    placesStore.filters.visit_from = isoDate(from)
+    placesStore.filters.visit_to   = isoDate(now)
+  }
+  fetchFiltered()
+}
+const activePreset = computed(() => {
+  const f = placesStore.filters
+  if (!f.visit_from || !f.visit_to) return ''
+  const now = new Date()
+  const y = now.getFullYear()
+  if (f.visit_from === `${y}-01-01` && f.visit_to === `${y}-12-31`) return 'this-year'
+  if (f.visit_from === `${y - 1}-01-01` && f.visit_to === `${y - 1}-12-31`) return 'prev-year'
+  // last-30-days меряется по разности в днях между to и сегодня
+  const to = new Date(f.visit_to)
+  const from = new Date(f.visit_from)
+  const dayMs = 86400000
+  if (Math.abs(now - to) < dayMs && Math.round((to - from) / dayMs) === 30) return 'last-30-days'
+  return ''
+})
+const dateRangeChip = computed(() => {
+  const f = placesStore.filters
+  if (!f.visit_from && !f.visit_to) return ''
+  const fmt = s => s ? s.replace(/-/g, '.').slice(2) : '…' // 26.12.05
+  return `${fmt(f.visit_from)}–${fmt(f.visit_to)}`
+})
+function clearDateRange() {
+  placesStore.filters.visit_from = ''
+  placesStore.filters.visit_to = ''
+  fetchFiltered()
+}
 
 const showShelves = computed(() => !placesStore.filters.search && activeFilterCount.value === 0)
 
@@ -345,6 +526,10 @@ function placeholderFor(id) { return placeholders[(id ?? 0) % placeholders.lengt
 function cuisineName(id) { return catalogs.cuisineTypes.find((c) => c.id === id)?.name || '' }
 function categoryName(id) { return catalogs.categories.find((c) => c.id === id)?.name || '' }
 function sortLabel(s) {
+  if (s.startsWith('rating_user:')) {
+    const id = parseInt(s.slice('rating_user:'.length), 10)
+    return `по оценке ${friendName(id) || '…'}`
+  }
   return ({ rating: 'рейтинг ↓', rating_asc: 'рейтинг ↑', name: 'алфавит' }[s] || 'сортировка')
 }
 
@@ -405,6 +590,10 @@ function resetFilters() {
   placesStore.filters.sort = ''
   placesStore.filters.is_gem = false
   placesStore.filters.min_rating = ''
+  placesStore.filters.attended_by = []
+  placesStore.filters.visit_from = ''
+  placesStore.filters.visit_to = ''
+  ratingUserId.value = ''
   fetchFiltered()
 }
 
@@ -417,6 +606,12 @@ function loadFiltersFromURL() {
   placesStore.filters.sort = q.sort || ''
   placesStore.filters.is_gem = q.is_gem === 'true'
   placesStore.filters.min_rating = q.min_rating || ''
+  placesStore.filters.attended_by = q.attended_by ? q.attended_by.split(',').map(Number) : []
+  placesStore.filters.visit_from = q.visit_from || ''
+  placesStore.filters.visit_to = q.visit_to || ''
+  if (placesStore.filters.sort?.startsWith('rating_user:')) {
+    ratingUserId.value = placesStore.filters.sort.slice('rating_user:'.length)
+  }
   if (q.page) placesStore.page = parseInt(q.page) || 1
 }
 
@@ -562,7 +757,7 @@ onMounted(async () => {
   }
   .count {
     background: var(--sb-terracotta);
-    color: #fff;
+    color: var(--sb-on-accent);
     font-family: var(--sb-serif);
     font-style: normal;
     font-size: 10px;
@@ -585,7 +780,7 @@ onMounted(async () => {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  background: #fdfcf7;
+  background: var(--sb-paper-card);
   border: none;
   border-radius: 999px;
   padding: 8px 14px;
@@ -788,9 +983,9 @@ onMounted(async () => {
   width: 60px;
   height: 60px;
   font-size: 22px;
-  box-shadow: 0 0 0 2px #fdfcf7, 0 2px 6px rgba(40, 30, 20, 0.18);
+  box-shadow: 0 0 0 2px var(--sb-paper-card), 0 2px 6px rgba(40, 30, 20, 0.18);
 }
-.friend-avatar.has-photo { background: #fdfcf7; overflow: hidden; }
+.friend-avatar.has-photo { background: var(--sb-paper-card); overflow: hidden; }
 .friend-avatar .r-ph { display: block; width: 100%; height: 100%; object-fit: cover; }
 .friend-name {
   font-family: var(--sb-serif);
@@ -864,18 +1059,94 @@ onMounted(async () => {
 }
 .btn-apply {
   background: var(--sb-terracotta);
-  color: #fff;
+  color: var(--sb-on-accent);
   border: none;
   border-radius: 999px;
   padding: 10px 18px;
   font-family: var(--sb-serif);
   font-style: italic;
-  &:hover { background: oklch(0.55 0.14 30); color: #fff; }
+  &:hover { background: oklch(0.55 0.14 30); color: var(--sb-on-accent); }
 }
 .reset-btn {
   font-family: var(--sb-serif);
   font-style: italic;
   color: var(--sb-ink-mute);
   text-decoration: none;
+}
+
+/* Q5 — «кто был»: лента аватарок-чипов с многоточным выбором. */
+.att-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.att-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px 4px 4px;
+  background: transparent;
+  border: 1.4px dashed rgba(40, 30, 20, 0.18);
+  border-radius: 999px;
+  cursor: pointer;
+  font-family: var(--sb-serif);
+  font-style: italic;
+  font-size: 14px;
+  color: var(--sb-ink);
+
+  &.on {
+    border-style: solid;
+    border-color: var(--sb-terracotta);
+    background: oklch(0.92 0.07 25);
+    color: var(--sb-terracotta);
+  }
+
+  .r-tag {
+    position: relative;
+    width: 24px;
+    height: 24px;
+    font-size: 11px;
+  }
+  .r-tag.has-photo { overflow: hidden; }
+  .r-ph { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .att-name {
+    line-height: 1;
+  }
+}
+
+/* Q5 — «когда»: бумажные date-инпуты + preset-чипы под ними. */
+.date-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  .form-control { flex: 1 1 0; }
+}
+.date-sep {
+  font-family: var(--sb-hand);
+  font-size: 18px;
+  color: var(--sb-ink-mute);
+}
+.preset-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+.preset-chip {
+  background: transparent;
+  border: 1.4px dashed rgba(40, 30, 20, 0.22);
+  border-radius: 999px;
+  padding: 4px 12px;
+  font-family: var(--sb-hand);
+  font-size: 14px;
+  color: var(--sb-ink-soft);
+  cursor: pointer;
+
+  &.on {
+    border-style: solid;
+    border-color: var(--sb-terracotta);
+    color: var(--sb-terracotta);
+    background: oklch(0.94 0.05 30);
+  }
 }
 </style>

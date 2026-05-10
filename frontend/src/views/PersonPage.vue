@@ -25,6 +25,8 @@
           :labels="['мест', 'жемчужин', 'городов']"
         />
       </div>
+
+      <div v-if="cuisineLine" class="cuisine-line">{{ cuisineLine }}</div>
     </header>
 
     <section v-if="loading" class="sb-empty">листаем заметки…</section>
@@ -74,9 +76,11 @@ import ResultCard from '../components/scrapbook/ResultCard.vue'
 import Ticket from '../components/scrapbook/Ticket.vue'
 import Stamp from '../components/scrapbook/Stamp.vue'
 import { authorColor } from '../composables/useFeed'
+import { favoriteCuisinePhrase } from '../composables/useCuisine'
 
 const route = useRoute()
 const profile = ref(null)
+const cuisineLine = computed(() => favoriteCuisinePhrase(profile.value))
 const places = ref([])
 const gems = ref([])
 const cities = ref([])
@@ -140,9 +144,9 @@ watch(() => route.params.id, () => { if (route.params.id) load() })
   width: 56px;
   height: 56px;
   font-size: 22px;
-  box-shadow: 0 0 0 2px #fdfcf7, 0 2px 6px rgba(40, 30, 20, 0.18);
+  box-shadow: 0 0 0 2px var(--sb-paper-card), 0 2px 6px rgba(40, 30, 20, 0.18);
 }
-.r-tag.has-photo { background: #fdfcf7; overflow: hidden; }
+.r-tag.has-photo { background: var(--sb-paper-card); overflow: hidden; }
 .r-ph { width: 100%; height: 100%; object-fit: cover; display: block; }
 
 .name {
@@ -156,6 +160,14 @@ watch(() => route.params.id, () => { if (route.params.id) load() })
 }
 
 .stats { display: inline-block; }
+
+.cuisine-line {
+  margin-top: 10px;
+  font-family: var(--sb-hand);
+  font-size: 18px;
+  color: var(--sb-ink-soft);
+  line-height: 1.2;
+}
 
 .city-list {
   display: flex;

@@ -157,7 +157,7 @@ function ticketTilt(i) { return tilts[i % tilts.length] }
 }
 
 .generator {
-  background: #fdfcf7;
+  background: var(--sb-paper-card);
   padding: 14px 16px;
   border-radius: 1px;
   box-shadow:
@@ -175,7 +175,7 @@ function ticketTilt(i) { return tilts[i % tilts.length] }
 
 .btn-apply {
   background: var(--sb-terracotta);
-  color: #fff;
+  color: var(--sb-on-accent);
   border: none;
   border-radius: 999px;
   padding: 10px 18px;
@@ -306,7 +306,7 @@ function ticketTilt(i) { return tilts[i % tilts.length] }
     cursor: pointer;
     box-shadow: 0 1px 2px rgba(40, 15, 5, 0.3);
     z-index: 4;
-    &:hover { background: var(--sb-terracotta); color: #fff; }
+    &:hover { background: var(--sb-terracotta); color: var(--sb-on-accent); }
   }
 }
 

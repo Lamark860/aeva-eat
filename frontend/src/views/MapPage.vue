@@ -260,7 +260,7 @@ onMounted(async () => {
   }
   .count {
     background: var(--sb-terracotta);
-    color: #fff;
+    color: var(--sb-on-accent);
     font-family: var(--sb-serif);
     font-style: normal;
     font-size: 10px;
@@ -306,13 +306,13 @@ onMounted(async () => {
 }
 .btn-apply {
   background: var(--sb-terracotta);
-  color: #fff;
+  color: var(--sb-on-accent);
   border: none;
   border-radius: 999px;
   padding: 10px 18px;
   font-family: var(--sb-serif);
   font-style: italic;
-  &:hover { background: oklch(0.55 0.14 30); color: #fff; }
+  &:hover { background: oklch(0.55 0.14 30); color: var(--sb-on-accent); }
 }
 .reset-btn {
   font-family: var(--sb-serif);

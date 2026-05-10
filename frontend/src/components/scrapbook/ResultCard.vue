@@ -99,7 +99,7 @@ const reviewers = computed(() => (props.place.reviewers || []).slice(0, 3))
   display: flex;
   gap: 12px;
   padding: 12px 12px 14px;
-  background: #fdfcf7;
+  background: var(--sb-paper-card);
   border-radius: 1px;
   text-decoration: none;
   color: inherit;
@@ -200,7 +200,7 @@ const reviewers = computed(() => (props.place.reviewers || []).slice(0, 3))
   margin-left: 0;
 }
 .people .r-tag.has-photo {
-  background: #fdfcf7;
+  background: var(--sb-paper-card);
   overflow: hidden;
 }
 .people .r-ph {

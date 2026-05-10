@@ -19,12 +19,6 @@
               <span class="hint">короткий текст · бумага · тейп</span>
             </button>
 
-            <button class="item disabled" type="button" disabled>
-              <span class="glyph">✿</span>
-              <span class="label">в&nbsp;wishlist</span>
-              <span class="hint">скоро</span>
-            </button>
-
             <button class="cancel" type="button" @click="close">отмена</button>
           </div>
         </transition>

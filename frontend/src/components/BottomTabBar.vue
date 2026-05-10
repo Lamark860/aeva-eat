@@ -82,6 +82,6 @@ onUnmounted(() => feed.stop())
   height: 8px;
   border-radius: 50%;
   background: var(--sb-terracotta);
-  box-shadow: 0 0 0 2px #fdfcf7;
+  box-shadow: 0 0 0 2px var(--sb-paper-card);
 }
 </style>

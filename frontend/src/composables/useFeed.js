@@ -69,6 +69,9 @@ function formatBucketLabel(bucket) {
 export function useFeed() {
   const places = ref([])
   const notes = ref([])
+  const wishlist = ref([])
+  const events = ref([])
+  const users = ref([])
   const loading = ref(false)
   const error = ref(null)
 
@@ -76,34 +79,77 @@ export function useFeed() {
     loading.value = true
     error.value = null
     try {
-      // Параллельно: места (для артефактов с фото/билетиком) и записки.
-      // sort=new для places — мест по created_at desc; notes уже отдаются
-      // в порядке свежие сверху.
-      const [placesRes, notesRes] = await Promise.allSettled([
+      // Q4 — лента event-driven: /api/feed диктует хронологию (review/note),
+      // /places и /notes даёт rich-данные для рендера, /wishlist/all — планы,
+      // /users — резолв attendees-id'шников в имена/аватары.
+      const [eventsRes, placesRes, notesRes, wishRes, usersRes] = await Promise.allSettled([
+        http.get('/feed', { params: { limit: 100 } }),
         http.get('/places', { params: { sort: 'new', limit: 60 } }),
         http.get('/notes'),
+        http.get('/wishlist/all'),
+        http.get('/users'),
       ])
-      places.value = placesRes.status === 'fulfilled' ? (placesRes.value.data.places || []) : []
-      notes.value  = notesRes.status  === 'fulfilled' ? (notesRes.value.data || []) : []
+      events.value   = eventsRes.status === 'fulfilled' ? (eventsRes.value.data || []) : []
+      places.value   = placesRes.status === 'fulfilled' ? (placesRes.value.data.places || []) : []
+      notes.value    = notesRes.status  === 'fulfilled' ? (notesRes.value.data || []) : []
+      wishlist.value = wishRes.status   === 'fulfilled' ? (wishRes.value.data || []) : []
+      users.value    = usersRes.status  === 'fulfilled' ? (usersRes.value.data || []) : []
     } catch (e) {
       error.value = e
+      events.value = []
       places.value = []
       notes.value = []
+      wishlist.value = []
+      users.value = []
     } finally {
       loading.value = false
     }
   }
 
-  // Объединяем places + notes в одну хронологию артефактов. Каждый item
-  // получает _kind ('place' | 'note') — Home рендерит соответствующий
-  // компонент. Сортировка по _date desc.
+  // Q4 — группировка place-артефактов по (place_id, date, attendees-set).
+  // Это закрывает «раз в месяц туда же» как отдельные карточки, а не одну
+  // плитку с устаревшей датой. Wishlist и notes не группируются, т.к. они
+  // разовые события.
   const items = computed(() => {
+    const placeMap = new Map(places.value.map(p => [p.id, p]))
+    const userMap  = new Map(users.value.map(u => [u.id, u]))
     const out = []
-    for (const p of places.value) {
-      out.push({ _kind: 'place', _date: new Date(p.created_at || p.updated_at || Date.now()), ...p })
+
+    // Группы review-событий: ключ — place_id|YYYY-MM-DD|sorted-attendees.
+    const reviewGroups = new Map()
+    for (const ev of events.value) {
+      if (ev.kind !== 'review_added' || !ev.place_id) continue
+      const place = placeMap.get(ev.place_id)
+      if (!place) continue
+      const day = (ev.occurred_at || '').slice(0, 10)
+      const att = (ev.attendees || []).slice().sort((a, b) => a - b)
+      const key = `${ev.place_id}|${day}|${att.join(',')}`
+      if (!reviewGroups.has(key)) {
+        reviewGroups.set(key, {
+          _kind: 'place',
+          _date: new Date(ev.occurred_at),
+          _attendees: att.map(id => userMap.get(id)).filter(Boolean),
+          // id для tilt-хэша: нумеровать, чтобы повторные визиты в одно
+          // место в разные дни получали разные наклоны.
+          id: `${ev.place_id}-${day}`,
+          _placeId: ev.place_id,
+          ...place,
+        })
+      }
     }
+    out.push(...reviewGroups.values())
+
     for (const n of notes.value) {
       out.push({ _kind: 'note', _date: new Date(n.created_at), id: `note-${n.id}`, _note: n })
+    }
+    for (const w of wishlist.value) {
+      const date = w.is_struck && w.struck_at ? w.struck_at : w.created_at
+      out.push({
+        _kind: 'wishlist',
+        _date: new Date(date),
+        id: `wish-${w.user_id}-${w.place.id}`,
+        _wish: w,
+      })
     }
     out.sort((a, b) => b._date - a._date)
     return out

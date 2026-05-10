@@ -181,9 +181,9 @@ onMounted(load)
   width: 48px;
   height: 48px;
   font-size: 18px;
-  box-shadow: 0 0 0 2px #fdfcf7, 0 2px 4px rgba(40, 30, 20, 0.18);
+  box-shadow: 0 0 0 2px var(--sb-paper-card), 0 2px 4px rgba(40, 30, 20, 0.18);
 }
-.person-tile .r-tag.has-photo { background: #fdfcf7; overflow: hidden; }
+.person-tile .r-tag.has-photo { background: var(--sb-paper-card); overflow: hidden; }
 .person-tile .r-ph { width: 100%; height: 100%; object-fit: cover; display: block; }
 .person-name {
   font-family: var(--sb-serif);

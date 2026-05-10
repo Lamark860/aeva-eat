@@ -121,7 +121,7 @@ const display = computed(() => {
     inset 0 -1px 1px rgba(0, 0, 0, 0.3),
     inset 0 1px 1px rgba(255, 255, 255, 0.3),
     0 1px 2px rgba(40, 15, 5, 0.3),
-    0 0 0 3px #fdfcf7;
+    0 0 0 3px var(--sb-paper-card);
   cursor: pointer;
   transition: transform 0.15s;
 }
@@ -137,7 +137,7 @@ const display = computed(() => {
     inset 0 -1px 1px rgba(0, 0, 0, 0.3),
     inset 0 1px 1px rgba(255, 255, 255, 0.3),
     0 1px 2px rgba(40, 15, 5, 0.3),
-    0 0 0 3px #fdfcf7;
+    0 0 0 3px var(--sb-paper-card);
   border: none;
   cursor: pointer;
 }

@@ -29,26 +29,30 @@
         <template v-for="item in currentVisible" :key="item.id">
           <div
             class="doska-cell"
-            :class="[isFeatured(item, buckets.current.items) ? 'featured' : cellTilt(item)]"
+            :class="[
+              cellTilt(item),
+              {
+                featured: isFeatured(item, buckets.current.items),
+                'has-video': item._kind === 'place' && item.has_video,
+              },
+            ]"
           >
             <ArtifactCard
-              v-if="item._kind !== 'note'"
+              v-if="item._kind === 'place'"
               :place="item"
               :featured="isFeatured(item, buckets.current.items)"
+              :attendees="item._attendees"
             />
             <NoteArtifact
-              v-else
+              v-else-if="item._kind === 'note'"
               :note="item._note"
               :can-edit="auth.user?.id === item._note.author_id"
               @delete="onDeleteNote"
             />
-          </div>
-          <div
-            v-if="item._kind !== 'note' && item.has_video"
-            :key="`kr-${item.id}`"
-            class="doska-cell divider-cell"
-          >
-            <KruzhokDivider :place-id="item.id" :place-name="item.name" :date="item.created_at" />
+            <WishlistArtifact
+              v-else-if="item._kind === 'wishlist'"
+              :entry="item._wish"
+            />
           </div>
         </template>
       </div>
@@ -83,43 +87,50 @@
           @expand="toggleBucket(b.key)"
         />
 
-        <section v-else class="doska-archive">
-          <div class="sb-week-head">
-            <div class="dates">{{ b.label }}</div>
-            <div class="rule"></div>
-            <button class="sb-more-link collapse-btn" type="button" @click="toggleBucket(b.key)">
-              свернуть&nbsp;↑
-            </button>
-          </div>
+        <Transition name="archive" @enter="onArchiveEnter" @leave="onArchiveLeave">
+          <section v-if="isExpanded(b.key)" class="doska-archive archive-stagger">
+            <div class="sb-week-head">
+              <div class="dates">{{ b.label }}</div>
+              <div class="rule"></div>
+              <button class="sb-more-link collapse-btn" type="button" @click="toggleBucket(b.key)">
+                свернуть&nbsp;↑
+              </button>
+            </div>
 
-          <div class="doska-week">
-            <template v-for="item in b.items" :key="`${b.key}-${item.id}`">
-              <div
-                class="doska-cell"
-                :class="[isFeatured(item, b.items) ? 'featured' : cellTilt(item)]"
-              >
-                <ArtifactCard
-                  v-if="item._kind !== 'note'"
-                  :place="item"
-                  :featured="isFeatured(item, b.items)"
-                />
-                <NoteArtifact
-                  v-else
-                  :note="item._note"
-                  :can-edit="auth.user?.id === item._note.author_id"
-                  @delete="onDeleteNote"
-                />
-              </div>
-              <div
-                v-if="item._kind !== 'note' && item.has_video"
-                :key="`${b.key}-kr-${item.id}`"
-                class="doska-cell divider-cell"
-              >
-                <KruzhokDivider :place-id="item.id" :place-name="item.name" :date="item.created_at" />
-              </div>
-            </template>
-          </div>
-        </section>
+            <div class="doska-week">
+              <template v-for="(item, i) in b.items" :key="`${b.key}-${item.id}`">
+                <div
+                  class="doska-cell"
+                  :class="[
+                    cellTilt(item),
+                    {
+                      featured: isFeatured(item, b.items),
+                      'has-video': item._kind === 'place' && item.has_video,
+                    },
+                  ]"
+                  :style="{ '--i': i }"
+                >
+                  <ArtifactCard
+                    v-if="item._kind === 'place'"
+                    :place="item"
+                    :featured="isFeatured(item, b.items)"
+                    :attendees="item._attendees"
+                  />
+                  <NoteArtifact
+                    v-else-if="item._kind === 'note'"
+                    :note="item._note"
+                    :can-edit="auth.user?.id === item._note.author_id"
+                    @delete="onDeleteNote"
+                  />
+                  <WishlistArtifact
+                    v-else-if="item._kind === 'wishlist'"
+                    :entry="item._wish"
+                  />
+                </div>
+              </template>
+            </div>
+          </section>
+        </Transition>
       </template>
 
       <div
@@ -162,8 +173,8 @@ import CollapsedStrip from '../components/scrapbook/CollapsedStrip.vue'
 import AddArtifactSheet from '../components/scrapbook/AddArtifactSheet.vue'
 import NoteSheet from '../components/scrapbook/NoteSheet.vue'
 import ArtifactCard from '../components/scrapbook/ArtifactCard.vue'
-import KruzhokDivider from '../components/scrapbook/KruzhokDivider.vue'
 import NoteArtifact from '../components/scrapbook/NoteArtifact.vue'
+import WishlistArtifact from '../components/scrapbook/WishlistArtifact.vue'
 import { useAuthStore } from '../stores/auth'
 import { useNotesStore } from '../stores/notes'
 import { useToast } from '../composables/useToast'
@@ -202,30 +213,69 @@ function toggleBucket(key) {
   expandedBuckets.value = next
 }
 
+// DESIGN-DECISIONS Q10: «бумага раскрывается» — height-animate 320мс на разворот
+// прошедшей недели. Натуральная высота меряется через scrollHeight и анимируется
+// в один проход; opacity stagger детей идёт через CSS animation-delay (см. .doska-archive .doska-cell).
+const ARCHIVE_EASE = 'cubic-bezier(0.2, 0.8, 0.2, 1)'
+function onArchiveEnter(el, done) {
+  el.style.overflow = 'hidden'
+  el.style.height = '0px'
+  // force reflow so the transition starts from 0
+  void el.offsetHeight
+  el.style.transition = `height 320ms ${ARCHIVE_EASE}`
+  el.style.height = el.scrollHeight + 'px'
+  const onEnd = () => {
+    el.style.height = ''
+    el.style.transition = ''
+    el.style.overflow = ''
+    el.removeEventListener('transitionend', onEnd)
+    done()
+  }
+  el.addEventListener('transitionend', onEnd)
+}
+function onArchiveLeave(el, done) {
+  el.style.overflow = 'hidden'
+  el.style.height = el.scrollHeight + 'px'
+  void el.offsetHeight
+  el.style.transition = `height 320ms ${ARCHIVE_EASE}`
+  el.style.height = '0px'
+  const onEnd = () => {
+    el.removeEventListener('transitionend', onEnd)
+    done()
+  }
+  el.addEventListener('transitionend', onEnd)
+}
+
 const currentVisible = computed(() => (buckets.value.current?.items || []).slice(0, visibleCount.value))
 
 const tilts = ['sb-t-l3', 'sb-t-r1', 'sb-t-l2', 'sb-t-r2', 'sb-t-r3', 'sb-t-l1']
 function cellTilt(item) {
-  return tilts[(item.id ?? 0) % tilts.length]
+  // id может быть числом (place) или строкой `note-N` / `wish-U-P`. Делаем
+  // стабильный хэш строкового представления.
+  const s = String(item.id ?? '0')
+  let h = 0
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0
+  return tilts[Math.abs(h) % tilts.length]
 }
 
 // A1 — full-width «звезда» раз в 5+ карточек (NEXT.md §A1). Только для
-// place-артефактов (записки никогда не становятся звездой). Приоритет:
-// первая жемчужина > первый place-item (если в бакете ≥5 элементов).
+// place-артефактов (записки и wishlist-планы не становятся звездой).
+// Приоритет: первая жемчужина > первый place-item (если в бакете ≥5 элементов).
 function pickFeaturedId(items) {
   if (!items || items.length < 5) return null
-  const placeItems = items.filter(i => i._kind !== 'note')
+  const placeItems = items.filter(i => i._kind === 'place')
   if (!placeItems.length) return null
   const gem = placeItems.find(p => p.is_gem_place)
   return (gem ?? placeItems[0])?.id ?? null
 }
 function isFeatured(item, bucketItems) {
-  if (item._kind === 'note') return false
+  if (item._kind !== 'place') return false
   return item.id === pickFeaturedId(bucketItems)
 }
 
 function summaryFor(b) {
-  return b.items.slice(0, 3).map((p, i) => ({
+  // CollapsedStrip показывает превью только реальных визитов.
+  return b.items.filter(i => i._kind === 'place').slice(0, 3).map((p, i) => ({
     id: p.id,
     src: p.image_url || '',
     cap: p.name,
@@ -234,7 +284,7 @@ function summaryFor(b) {
   }))
 }
 function gemsIn(b) {
-  return b.items.filter((p) => p.is_gem_place).length
+  return b.items.filter((p) => p._kind === 'place' && p.is_gem_place).length
 }
 
 function onPick(kind) {
@@ -310,6 +360,9 @@ onMounted(() => {
   // tilts come from sb-t-* utility classes — leave room for them
   transform-origin: center;
   min-width: 0;
+  // DESIGN-DECISIONS Q10: первый mount артефакта — fade + slide-up 8px, 280мс.
+  // `translate` (а не `transform`), чтобы не клобберить tilt-rotate из sb-t-*.
+  animation: sb-cell-in 280ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
 
   &.featured {
     grid-column: 1 / -1;
@@ -318,11 +371,23 @@ onMounted(() => {
     transform: rotate(-0.6deg);
   }
 
-  // Kruzhok-разделитель — тоже full-width, без tilt'а, минимальная высота.
-  &.divider-cell {
+  // Q-video: место с видео получает всю строку. Кружочек прилипает к карточке
+  // изнутри ArtifactCard — отдельной KruzhokDivider-ячейки больше нет.
+  // Дополнительный padding-bottom — чтобы тень кружочка не наезжала на следующий ряд.
+  &.has-video {
     grid-column: 1 / -1;
-    transform: none;
+    padding-bottom: 14px;
   }
+}
+
+@keyframes sb-cell-in {
+  from { opacity: 0; translate: 0 8px; }
+  to   { opacity: 1; translate: 0 0; }
+}
+
+// Q10: при разворачивании архива дети вступают со stagger 40мс — «бумага раскрывается».
+.archive-stagger .doska-cell {
+  animation-delay: calc(var(--i, 0) * 40ms);
 }
 
 .doska-archive {
@@ -375,7 +440,7 @@ onMounted(() => {
   align-items: center;
   padding: 12px 22px;
   background: var(--sb-terracotta);
-  color: #fff;
+  color: var(--sb-on-accent);
   border-radius: 999px;
   font-family: var(--sb-serif);
   font-style: italic;

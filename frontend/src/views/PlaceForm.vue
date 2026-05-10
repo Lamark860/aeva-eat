@@ -357,7 +357,7 @@ async function handleImageUpload() {
 }
 
 .form-section {
-  background: #fdfcf7;
+  background: var(--sb-paper-card);
   padding: 14px;
   border-radius: 1px;
   box-shadow:
@@ -413,7 +413,7 @@ async function handleImageUpload() {
 }
 .btn-apply {
   background: var(--sb-terracotta);
-  color: #fff;
+  color: var(--sb-on-accent);
   border: none;
   border-radius: 999px;
   padding: 12px 22px;
@@ -423,7 +423,7 @@ async function handleImageUpload() {
   cursor: pointer;
   flex: 1;
   &:disabled { opacity: 0.5; cursor: not-allowed; }
-  &:hover:not(:disabled) { background: oklch(0.55 0.14 30); color: #fff; }
+  &:hover:not(:disabled) { background: oklch(0.55 0.14 30); color: var(--sb-on-accent); }
 }
 .cancel-link {
   font-family: var(--sb-serif);

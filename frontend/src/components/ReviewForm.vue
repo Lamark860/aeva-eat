@@ -318,7 +318,7 @@ async function handleSubmit() {
   &:focus {
     border-color: var(--sb-terracotta);
     box-shadow: 0 0 0 2px oklch(0.55 0.14 30 / 0.15);
-    background: #fdfcf7;
+    background: var(--sb-paper-card);
   }
   &::placeholder {
     color: var(--sb-ink-mute);
@@ -399,7 +399,7 @@ textarea.paper-control {
   flex: 0 0 auto;
   width: 120px;
   height: 138px;          /* квадрат фото + caption-полоса снизу */
-  background: #fdfcf7;
+  background: var(--sb-paper-card);
   padding: 6px 6px 22px;
   box-shadow:
     0 1px 1px rgba(40, 30, 20, 0.08),
@@ -469,8 +469,8 @@ textarea.paper-control {
   height: 22px;
   border-radius: 50%;
   background: var(--sb-ink);
-  color: #fdfcf7;
-  border: 2px solid #fdfcf7;
+  color: var(--sb-paper-card);
+  border: 2px solid var(--sb-paper-card);
   font-family: var(--sb-serif);
   font-size: 14px;
   line-height: 1;
@@ -494,7 +494,7 @@ textarea.paper-control {
   overflow: hidden;
   background: #000;
   box-shadow:
-    0 0 0 3px #fdfcf7,
+    0 0 0 3px var(--sb-paper-card),
     0 2px 4px rgba(40, 30, 20, 0.18),
     0 8px 18px rgba(40, 30, 20, 0.18);
 }
@@ -512,7 +512,7 @@ textarea.paper-control {
 }
 .btn-apply {
   background: var(--sb-terracotta);
-  color: #fff;
+  color: var(--sb-on-accent);
   border: none;
   border-radius: 999px;
   padding: 12px 22px;
@@ -522,7 +522,7 @@ textarea.paper-control {
   cursor: pointer;
   flex: 1;
   &:disabled { opacity: 0.5; cursor: not-allowed; }
-  &:hover:not(:disabled) { background: oklch(0.55 0.14 30); color: #fff; }
+  &:hover:not(:disabled) { background: oklch(0.55 0.14 30); color: var(--sb-on-accent); }
 }
 .cancel-link {
   background: transparent;

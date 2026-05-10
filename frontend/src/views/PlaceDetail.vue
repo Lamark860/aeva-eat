@@ -46,6 +46,17 @@
           </router-link>
         </div>
 
+        <!-- Q2: рукописная подпись под штампом жемчужины — кто и когда первым отметил. -->
+        <div v-if="gemSignature" class="gem-signature">
+          <router-link
+            v-if="gemSignature.firstUser"
+            :to="`/people/${gemSignature.firstUser.id}`"
+            class="gem-actor"
+          >{{ gemSignature.actor }}</router-link>
+          <span v-if="gemSignature.firstAt"> · {{ gemSignature.firstAt }}</span>
+          <span v-if="gemSignature.others" class="gem-others"> ({{ gemSignature.others }})</span>
+        </div>
+
         <div v-if="place.address" class="hand-meta">{{ place.address }}</div>
         <div v-if="place.website" class="hand-meta">
           <a :href="place.website" target="_blank" rel="noopener">{{ websiteHost }}</a>
@@ -69,6 +80,26 @@
           <div class="num">{{ place.review_count }}</div>
           <div class="lbl">{{ reviewsLabel }}</div>
         </div>
+      </section>
+
+      <!-- Q2: «кто был» — аватарки + рукописное ×N. Тап → профиль. -->
+      <section v-if="attendanceList.length" class="detail-attendance">
+        <router-link
+          v-for="a in attendanceList"
+          :key="a.user_id"
+          :to="`/people/${a.user_id}`"
+          class="att-chip"
+          :title="a.username"
+        >
+          <span
+            class="att-avatar sb-author-tag"
+            :class="authorColor(a.user_id)"
+          >
+            <img v-if="a.avatar_url" :src="a.avatar_url" alt="" class="att-photo" />
+            <template v-else>{{ a.username.slice(0, 1).toUpperCase() }}</template>
+          </span>
+          <span v-if="a.visit_count > 1" class="att-times">×{{ a.visit_count }}</span>
+        </router-link>
       </section>
 
       <!-- CTA buttons -->
@@ -179,6 +210,7 @@ import Tape from '../components/scrapbook/Tape.vue'
 import Stamp from '../components/scrapbook/Stamp.vue'
 import Ticket from '../components/scrapbook/Ticket.vue'
 import GemBadge from '../components/scrapbook/GemBadge.vue'
+import { authorColor } from '../composables/useFeed'
 
 const route = useRoute()
 const router = useRouter()
@@ -217,6 +249,34 @@ const overallRating = computed(() => {
   if (!p || p.avg_food == null || p.avg_service == null || p.avg_vibe == null) return '–'
   return ((Number(p.avg_food) + Number(p.avg_service) + Number(p.avg_vibe)) / 3).toFixed(1)
 })
+
+// Q2 — рукописная подпись под штампом жемчужины. Глагол «отметил/отметила»
+// гендерируется эвристикой по окончанию имени (-а/-я → fem). Несовершенно,
+// но без gender-поля у пользователей — лучшее, что можно сделать без новой схемы.
+const monthsRu = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня',
+                  'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря']
+function shortDateRu(iso) {
+  if (!iso) return ''
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return ''
+  return `${d.getDate()} ${monthsRu[d.getMonth()]}`
+}
+function gemVerb(username) {
+  return /[ая]$/i.test(username || '') ? 'отметила' : 'отметил'
+}
+const gemSignature = computed(() => {
+  const gs = place.value?.gem_status
+  if (!gs || !gs.marked_by?.length) return null
+  const [first, ...rest] = gs.marked_by
+  return {
+    firstUser: first,
+    actor: `${gemVerb(first.username)} ${first.username}`,
+    firstAt: shortDateRu(gs.first_marked_at),
+    others: rest.length ? `+ ${rest.map(u => u.username).join(', ')}` : '',
+  }
+})
+
+const attendanceList = computed(() => place.value?.attendance || [])
 
 const reviewsLabel = computed(() => {
   const n = (place.value?.review_count || 0) % 100
@@ -495,7 +555,7 @@ onMounted(async () => {
 .detail-form {
   margin: 0 16px 18px;
   padding: 14px;
-  background: #fdfcf7;
+  background: var(--sb-paper-card);
   box-shadow:
     0 1px 1px rgba(40, 30, 20, 0.06),
     0 4px 14px rgba(40, 30, 20, 0.07);
@@ -512,4 +572,56 @@ onMounted(async () => {
 }
 
 .ticket-wrap { display: inline-block; }
+
+.gem-signature {
+  font-family: var(--sb-hand);
+  font-size: 16px;
+  color: var(--sb-ink-mute);
+  text-align: center;
+  margin: 4px 0 8px;
+  line-height: 1.2;
+}
+.gem-actor {
+  color: var(--sb-ink-soft);
+  text-decoration: none;
+  &:hover { color: var(--sb-terracotta); }
+}
+.gem-others {
+  color: var(--sb-ink-mute);
+  font-size: 14px;
+}
+
+.detail-attendance {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 14px;
+  justify-content: center;
+  padding: 4px 18px 12px;
+}
+.att-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  text-decoration: none;
+  color: inherit;
+}
+.att-avatar {
+  position: relative;
+  width: 26px;
+  height: 26px;
+  font-size: 11px;
+  overflow: hidden;
+  background: var(--sb-paper-deep);
+}
+.att-photo {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.att-times {
+  font-family: var(--sb-hand);
+  font-size: 17px;
+  color: var(--sb-ink-soft);
+  line-height: 1;
+}
 </style>

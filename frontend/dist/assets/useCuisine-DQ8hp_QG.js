@@ -1,0 +1,1 @@
+function e(n){return n?n.toLowerCase().replace(/ая$/,"ую"):""}function i(n){const r=n%10,t=n%100;return t>=11&&t<=14||r===1?"раз":r>=2&&r<=4?"раза":"раз"}function u(n){if(!n)return"";const r=n.favorite_cuisine,t=n.favorite_cuisine_count||0;return!r||t<2?"":`любит ${e(r)} — ${t} ${i(t)}`}export{u as f};

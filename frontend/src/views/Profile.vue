@@ -22,6 +22,8 @@
           :labels="['мест', 'жемчужин', 'городов']"
         />
       </div>
+
+      <div v-if="cuisineLine" class="cuisine-line">{{ cuisineLine }}</div>
     </header>
 
     <!-- Tabs -->
@@ -218,6 +220,7 @@ import Ticket from '../components/scrapbook/Ticket.vue'
 import ResultCard from '../components/scrapbook/ResultCard.vue'
 import NoteArtifact from '../components/scrapbook/NoteArtifact.vue'
 import { useNotesStore } from '../stores/notes'
+import { favoriteCuisinePhrase } from '../composables/useCuisine'
 import http from '../api/http'
 
 const router = useRouter()
@@ -265,6 +268,17 @@ const tabs = [
 ]
 
 const initial = computed(() => (auth.user?.username || '?').slice(0, 1).toUpperCase())
+
+// Q8 — публичный профиль с favorite_cuisine. Грузим один раз на маунт.
+const userProfile = ref(null)
+const cuisineLine = computed(() => favoriteCuisinePhrase(userProfile.value))
+async function loadUserProfile() {
+  if (!auth.user?.id) return
+  try {
+    const { data } = await http.get(`/users/${auth.user.id}`)
+    userProfile.value = data
+  } catch { /* профиль необязателен — фразу просто не рендерим */ }
+}
 
 const stats = computed(() => {
   const placeIds = new Set()
@@ -402,6 +416,7 @@ onMounted(() => {
     wishlist.fetchPlaces()
     wishlist.fetchCustom()
     notesStore.fetchByAuthor(auth.user.id)
+    loadUserProfile()
   }
 })
 </script>
@@ -426,7 +441,7 @@ onMounted(() => {
   margin: 0 auto 10px;
   cursor: pointer;
   box-shadow:
-    0 0 0 4px #fdfcf7,
+    0 0 0 4px var(--sb-paper-card),
     0 2px 4px rgba(40, 30, 20, 0.18),
     0 8px 18px rgba(40, 30, 20, 0.12);
 }
@@ -453,7 +468,7 @@ onMounted(() => {
   align-items: center;
   justify-content: center;
   background: rgba(40, 30, 20, 0.4);
-  color: #fff;
+  color: var(--sb-on-accent);
   font-family: var(--sb-hand);
   font-size: 16px;
   opacity: 0;
@@ -480,6 +495,14 @@ onMounted(() => {
 .me-stats {
   display: inline-block;
   margin: 14px 0 6px;
+}
+
+.cuisine-line {
+  margin-top: 6px;
+  font-family: var(--sb-hand);
+  font-size: 18px;
+  color: var(--sb-ink-soft);
+  line-height: 1.2;
 }
 
 .me-tabs {
@@ -593,11 +616,11 @@ onMounted(() => {
   cursor: pointer;
   z-index: 4;
   box-shadow: 0 1px 2px rgba(40, 15, 5, 0.3);
-  &:hover { background: var(--sb-terracotta); color: #fff; }
+  &:hover { background: var(--sb-terracotta); color: var(--sb-on-accent); }
 }
 
 .settings-card {
-  background: #fdfcf7;
+  background: var(--sb-paper-card);
   padding: 14px;
   border-radius: 1px;
   box-shadow:
@@ -625,7 +648,7 @@ onMounted(() => {
 }
 .btn-apply {
   background: var(--sb-terracotta);
-  color: #fff;
+  color: var(--sb-on-accent);
   border: none;
   border-radius: 999px;
   padding: 8px 16px;
