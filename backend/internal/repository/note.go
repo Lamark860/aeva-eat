@@ -238,7 +238,8 @@ func (r *FeedEventsRepo) List(limit int) ([]model.FeedEvent, error) {
 					THEN ARRAY[e.author_id]::BIGINT[]
 					ELSE ARRAY[]::BIGINT[]
 				END
-			) AS attendees
+			) AS attendees,
+			(SELECT NULLIF(rv.video_url, '') FROM reviews rv WHERE rv.id = e.review_id) AS video_url
 		FROM feed_events e
 		ORDER BY e.occurred_at DESC, e.event_id DESC
 		LIMIT $1
@@ -253,7 +254,8 @@ func (r *FeedEventsRepo) List(limit int) ([]model.FeedEvent, error) {
 		var e model.FeedEvent
 		var attendees pq.Int64Array
 		if err := rows.Scan(&e.Kind, &e.EventID, &e.OccurredAt,
-			&e.PlaceID, &e.AuthorID, &e.ReviewID, &e.NoteID, &attendees); err != nil {
+			&e.PlaceID, &e.AuthorID, &e.ReviewID, &e.NoteID, &attendees,
+			&e.VideoURL); err != nil {
 			return nil, err
 		}
 		e.Attendees = make([]int, len(attendees))

@@ -106,38 +106,58 @@ export function useFeed() {
     }
   }
 
-  // Q4 — группировка place-артефактов по (place_id, date, attendees-set).
-  // Это закрывает «раз в месяц туда же» как отдельные карточки, а не одну
-  // плитку с устаревшей датой. Wishlist и notes не группируются, т.к. они
-  // разовые события.
+  // Q4 — группировка place-артефактов по (place_id, day). Все review-события
+  // одного места за один день мерджатся: attendees объединяются (тот же
+  // визит, но соавторы могли запостить отдельно), videos накапливаются
+  // как список URL (один отзыв с видео не должен расширять соседа без видео).
+  // Разные дни → разные карточки — это и закрывает «раз в месяц туда же»
+  // как отдельные артефакты в ленте.
   const items = computed(() => {
     const placeMap = new Map(places.value.map(p => [p.id, p]))
     const userMap  = new Map(users.value.map(u => [u.id, u]))
     const out = []
 
-    // Группы review-событий: ключ — place_id|YYYY-MM-DD|sorted-attendees.
     const reviewGroups = new Map()
     for (const ev of events.value) {
       if (ev.kind !== 'review_added' || !ev.place_id) continue
       const place = placeMap.get(ev.place_id)
       if (!place) continue
       const day = (ev.occurred_at || '').slice(0, 10)
-      const att = (ev.attendees || []).slice().sort((a, b) => a - b)
-      const key = `${ev.place_id}|${day}|${att.join(',')}`
-      if (!reviewGroups.has(key)) {
-        reviewGroups.set(key, {
+      const key = `${ev.place_id}|${day}`
+      let g = reviewGroups.get(key)
+      if (!g) {
+        g = {
           _kind: 'place',
           _date: new Date(ev.occurred_at),
-          _attendees: att.map(id => userMap.get(id)).filter(Boolean),
-          // id для tilt-хэша: нумеровать, чтобы повторные визиты в одно
-          // место в разные дни получали разные наклоны.
+          _attendeeIds: new Set(),
+          _videos: [],
           id: `${ev.place_id}-${day}`,
           _placeId: ev.place_id,
           ...place,
-        })
+          // override: per-event-grouped поля. Видео приходят из событий,
+          // не с уровня места — иначе все визиты в место с любым видео
+          // получат full-width.
+          videos: undefined,
+          video_url: undefined,
+        }
+        reviewGroups.set(key, g)
       }
+      for (const id of (ev.attendees || [])) g._attendeeIds.add(id)
+      if (ev.video_url) g._videos.push(ev.video_url)
+      // _date: берём самое раннее событие дня — карточка датируется началом визита
+      const d = new Date(ev.occurred_at)
+      if (d < g._date) g._date = d
     }
-    out.push(...reviewGroups.values())
+    for (const g of reviewGroups.values()) {
+      g._attendees = [...g._attendeeIds]
+        .sort((a, b) => a - b)
+        .map(id => userMap.get(id))
+        .filter(Boolean)
+      g.videos = g._videos
+      delete g._videos
+      delete g._attendeeIds
+      out.push(g)
+    }
 
     for (const n of notes.value) {
       out.push({ _kind: 'note', _date: new Date(n.created_at), id: `note-${n.id}`, _note: n })

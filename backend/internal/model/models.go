@@ -175,8 +175,9 @@ type FeedWeek struct {
 // FeedEvent — строка из VIEW feed_events. Объединяет review_added /
 // note_added в одну хронологию. Поля review_id и note_id взаимоисключающие.
 // Attendees — все участники события (для review_added это co-authors;
-// для note_added — единственный автор). Нужно для Q4-группировки на фронте
-// по (place_id, дата, набор-участников).
+// для note_added — единственный автор). Фронт группирует по
+// (place_id, date(occurred_at)) и аккумулирует attendees+videos из всех
+// событий группы.
 type FeedEvent struct {
 	Kind       string    `json:"kind"`
 	EventID    int       `json:"event_id"`
@@ -186,6 +187,10 @@ type FeedEvent struct {
 	ReviewID   *int      `json:"review_id,omitempty"`
 	NoteID     *int      `json:"note_id,omitempty"`
 	Attendees  []int     `json:"attendees,omitempty"`
+	// VideoURL — review.video_url для review_added (если есть). Привязка
+	// к конкретному отзыву нужна, чтобы кружок показывался только на той
+	// карточке, где видео реально было; иначе бы расширялись все визиты места.
+	VideoURL *string `json:"video_url,omitempty"`
 }
 
 // CityAggregate — строка для /api/cities: имя города + счётчики мест,
