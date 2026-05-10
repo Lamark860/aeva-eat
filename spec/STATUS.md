@@ -2,7 +2,7 @@
 
 Живой документ синка между разработкой и дизайном. Обновляется в каждом подходе.
 
-Последнее обновление: 2026-05-09 (раунд 4 — backend дельта + интеграция фронта).
+Последнее обновление: 2026-05-10 (раунд 5 — все ответы дизайнера R4 реализованы).
 
 ---
 
@@ -402,5 +402,85 @@ G3. **«+ Добавить» 5-я вкладка** — сейчас 4 таба, 
 ### Раунд 6 — полировка
 - Page-transitions между маршрутами
 - Мелкие анимации (страница месяца, разворот недели, появление gem)
+
+---
+
+## Раунд 5 — реализация ответов дизайнера R4 (2026-05-10)
+
+Дизайнер прислал решения по всем 10 вопросам OPEN-QUESTIONS.md. Все 10
+реализованы; ниже — что куда легло. Полные verbatim-формулировки
+в `DESIGN-DECISIONS.md` → «Раунд 2 решений». Коммиты `1dc6e36` (бэк) +
+`4e21242` (фронт), плюс post-commit фикс «video-poster без подложки».
+
+### Q9 — dark-theme audit
+- `color-scheme: light` зафиксирован в `:root` (`scrapbook.scss`) — Safari/Chrome не дарк-модят form controls на OS dark mode
+- Два новых токена: `--sb-paper-card` (#fdfcf7) и `--sb-on-accent` (#fff)
+- 30+ литеральных hex-значений по компонентам/views заменены на `var(...)`
+- `prefers-color-scheme: dark` нигде не используется — проверено
+
+### Q10 — анимации в ленте
+- Артефакт-mount: opacity + translate 0 8px → 0, 280мс, `cubic-bezier(0.2, 0.8, 0.2, 1)`. `translate` (не `transform`), чтобы не клобберить tilt-rotate
+- Разворот недели: JS-hooked `<Transition>` анимирует height 0 ↔ scrollHeight 320мс; дети в `.archive-stagger` получают `animation-delay: calc(var(--i, 0) * 40ms)` через inline-CSS-переменную
+- Hover-приподнятие на полароидах НЕ делается — проверено
+
+### Q8 — favorite cuisine
+- `composables/useCuisine.js` (NEW) — `cuisineAccusative`, `razSuffix`, `favoriteCuisinePhrase`. Прячет фразу при `count < 2` (один визит — не «любит»)
+- Бэк: `repository/aggregate.go` — UserProfile() добавляет SQL-агрегат `SELECT ct.name, COUNT(*) ... ORDER BY COUNT(*) DESC LIMIT 1`
+- Модель: `UserProfile.FavoriteCuisine *string` + `FavoriteCuisineCount int`
+- `views/Profile.vue` фетчит `/api/users/me` на mount; `views/PersonPage.vue` уже фетчил
+- Рендер «любит грузинскую — N раз» (Caveat) под billet-стат в обоих экранах
+
+### Q2 — расширенный `/api/places/:id`
+- Модель `Place` обогащена: `GemStatus *GemStatus` (marked_by[] + first_marked_at), `Attendance []Attendance` (visit_count), `RatingsPerUser []RatingsPerUser`
+- `repository/place.go` GetByID() + 3 новых хелпера: `getGemStatus`, `getAttendance`, `getRatingsPerUser`
+- UI на `views/PlaceDetail.vue`:
+  - Под штампом «жемчужина» — рукописная подпись «отметил(а) X · DD месяца (+ Y, Z)»
+  - Под общим тикетом-рейтингом — ряд `аватарка ×N` (рукописное N в Caveat)
+  - Тап на аватарку → `/people/:id`
+- ratings_per_user — отдаётся в JSON, но **не рендерится** как таблица (Q2: «только для бэка»)
+
+### Q1 — wishlist на Доске
+- `WishlistArtifact.vue` (NEW) — два состояния:
+  - **Активный**: `--paper` фон, терра-штамп `план`, канцелярская кнопка в углу
+  - **Зачёркнутый**: `--paper-deep`, moss-штамп `сходили ✓`, **SVG-волнистый штрих** (path с Q-кривыми, не CSS line-through), мини-полароид визита bottom-right внахлёст
+- `useFeed.js` — мерджит `/wishlist/all` в timeline с `_kind='wishlist'`. Дата сортировки = `struck_at` если зачёркнут, иначе `created_at`
+- `Home.vue` рендерит компонент в обеих ветках (current week + archive)
+
+### Q6 — AddArtifactSheet чистка
+- Удалён disabled-пункт «в wishlist · скоро». Sheet теперь = визит + записка (два пункта)
+
+### Q5 — расширенные фильтры
+- `stores/places.js` — `filters` дополнен `attended_by[]`, `visit_from`, `visit_to`. PARAM_MAP сохраняет singular-имена бэка
+- `views/Places.vue`:
+  - **«Кто был»** — drawer-секция с avatar-chip multi-select из друзей. Поиск по имени появляется при >10 пользователей
+  - **«Когда»** — date-инпуты с/по + preset-чипы (`этот год` / `прошлый год` / `последние 30 дней`). Активный preset вычисляется обратно из date range — reload-from-URL сохраняет подсветку чипа
+  - **Sort** добавлен «по оценке друга» — при выборе появляется второй select для конкретного друга, пишется как `sort=rating_user:N` (бэк уже принимает)
+- Active-filter chip row отражает все новые фильтры; «сброс» очищает их тоже
+
+### Q4 — useFeed event-driven
+- `useFeed.js` грузит `/api/feed` параллельно с places, notes, wishlist, users
+- Review-события группируются по `(place_id, date(occurred_at), attendees-set)` — каждая повторная встреча в то же место разными группами становится отдельной карточкой («раз в месяц туда же»)
+- Каждый сгруппированный артефакт несёт `_attendees` (резолв из `/users` через `userMap.get(id)`)
+- `ArtifactCard` принимает optional `attendees` prop. Если массив пустой/отсутствует — fallback на `place.reviewers` (защита от провала `/users`)
+- Бэк: `model.FeedEvent.Attendees []int` + `repository.note.go` `array_agg(ra.user_id)` поверх review_authors с CASE-fallback на author_id для notes
+
+### Q3 — публичный шаринг `/p/:id`
+- `handler/share.go` (NEW) — Go-handler без auth, `html/template` рендерит превью
+- `cmd/api/main.go` — роут `/p/{id}` зарегистрирован вне `/api/auth` группы
+- `nginx/nginx.conf` — `location ~ ^/p/[0-9]+$` проксирует на бэк
+- HTML: cover full-bleed → бумажная плашка → серифа имя → каракули город → штамп `жемчужина` (если is_gem) → CTA `войти, чтобы увидеть наши впечатления` (терракотовая)
+- OG/Twitter мета: `og:title=Place · City`, `og:description=камерный дневник еды`, `og:image=cover URL`
+- БЕЗ рейтингов и БЕЗ имён авторов — приватность
+
+### Bonus: video kruzhok привязан к ArtifactCard
+- Дизайнер во второй итерации показал, что отдельная строка `KruzhokDivider` смотрится «как-то странно, не понятно к какому заведению»
+- Решение: `KruzhokDivider` удалён из feed-grid; видео живёт **внутри ArtifactCard** круглым оверлеем (56px / 72px на full-width), bottom-right с `transform: rotate(-6deg)` и нахлёстом на полароид
+- Cell с `video_url` получает `grid-column: 1/-1` (full-width) — кружок не теснит соседей
+- В качестве content рендерим `<video preload=metadata muted playsinline>` с `place.video_url` — браузер вытаскивает первый кадр естественно, без сплошной тёмной подложки
+- `place.video_url` добавлен в модель + SQL (`SELECT rv.video_url ... LIMIT 1`)
+- Гейт `hasKruzhok` — на `place.video_url`, не на `has_video` (чтобы при undefined видео-URL не торчала пустая подложка)
+
+### Bonus fix: duplicate-archive
+- При обёртывании expanded-архив-секции в `<Transition>` для Q10 потерял `v-else` — секция рендерилась одновременно с CollapsedStrip. Восстановлено `v-if="isExpanded(b.key)"`
 - Edge-cases (длинные имена, пустые состояния)
 - A11y-проход (screen-reader labels, focus rings)

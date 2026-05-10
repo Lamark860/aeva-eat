@@ -85,14 +85,13 @@
           <span v-if="extraReviewers > 0" class="r-extra">+{{ extraReviewers }}</span>
         </div>
 
-        <!-- Q-video: кружочек видео внахлёст к полароиду. Карточка с has_video
-             в feed-grid становится full-width (см. .doska-cell.has-video в Home),
-             поэтому кружок не теснит соседей и явно «принадлежит» этому месту.
-             preload=metadata + muted+playsinline — браузер вытаскивает первый
-             кадр без автозапуска; iOS требует и то и другое. -->
+        <!-- Q-video: кружочек видео внахлёст к полароиду. Карточка с реальным
+             video_url в feed-grid становится full-width (см. .doska-cell.has-video
+             в Home), поэтому кружок не теснит соседей и явно «принадлежит»
+             этому месту. preload=metadata + muted+playsinline — браузер вытаскивает
+             первый кадр без автозапуска; iOS требует и то и другое. -->
         <span v-if="hasKruzhok" class="art-kruzhok">
           <video
-            v-if="place.video_url"
             class="art-kruzhok-video"
             :src="place.video_url"
             preload="metadata"
@@ -101,7 +100,6 @@
             disablepictureinpicture
             aria-hidden="true"
           ></video>
-          <span v-else class="art-kruzhok-fallback" aria-hidden="true"></span>
           <span class="art-kruzhok-play" aria-hidden="true">▶</span>
         </span>
       </div>
@@ -181,11 +179,12 @@ const extraReviewers = computed(() => Math.max(0, allReviewers.value.length - MA
 const stackPhotos = computed(() => props.place.feed_photos || [])
 const hasStack = computed(() => stackPhotos.value.length >= 2)
 
-// Q-video: рендерим кружок только когда у места есть видео И есть какое-то
-// фото (полароид, к которому он приклеивается). Без фото — билетик-only-карточка
-// без кружочка не теряет смысл, добавлять сюда визуально некуда.
+// Q-video: рендерим кружок только когда есть РЕАЛЬНЫЙ video_url (а не просто
+// has_video флаг). Иначе при незапущенной/нерефрешнутой бэке появлялась пустая
+// белая подложка вместо видео. Также требуем фото-вариант карточки —
+// билетик-only-режиму кружок прицепить визуально некуда.
 const hasKruzhok = computed(() =>
-  !!props.place.has_video && !isTicketOnly.value
+  !!props.place.video_url && !isTicketOnly.value
 )
 
 const hasRatings = computed(() => {
@@ -416,16 +415,6 @@ const metaLine = computed(() => {
   height: 100%;
   object-fit: cover;
   display: block;
-}
-/* Fallback — на случай video_url ещё нет (старые места до миграции).
-   Текстура paper-card вместо чёрного, чтобы не «прибивать» полароид. */
-.art-kruzhok-fallback {
-  display: block;
-  width: 100%;
-  height: 100%;
-  background: var(--sb-paper-deep);
-  background-image: radial-gradient(circle at 30% 30%,
-    rgba(40, 30, 20, 0.06), transparent 60%);
 }
 .art-kruzhok-play {
   position: absolute;
