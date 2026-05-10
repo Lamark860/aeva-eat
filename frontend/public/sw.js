@@ -1,69 +1,49 @@
-// AEVA Eat — minimal service worker.
-// Strategy:
-//   - Precache the app shell on install (index.html + manifest + icons).
-//   - Runtime cache same-origin GET requests for static assets (cache-first).
-//   - Pass through everything else to the network unchanged. API requests are
-//     never cached because the data is mutable and we don't want to serve a
-//     stale list of places offline.
+// AEVA Eat — kill-switch service worker (агрессивная версия).
 //
-// Bumping CACHE_VERSION evicts old caches on the next activate.
-
-const CACHE_VERSION = 'aeva-eat-v1';
-const SHELL_ASSETS = [
-  '/',
-  '/manifest.webmanifest',
-  '/icon-192.png',
-  '/icon-512.png',
-  '/apple-touch-icon.png',
-];
+// Контекст: предыдущая версия SW (CACHE_VERSION='aeva-eat-v1') кэшировала
+// app shell и статику cache-first. На время dev-туннеля (ngrok) и пока
+// идёт активная разработка это даёт «мерцание старого дизайна».
+//
+// Этот файл байт-отличается от старого, поэтому браузер автоматически
+// установит его как новую версию SW. На активации:
+//   1. skipWaiting + claim — забираем контроль над открытыми вкладками
+//      (без claim новый SW не видит существующих клиентов)
+//   2. Удаляем все кэши, которые SW успел накопить
+//   3. unregister — снимаем регистрацию самого себя
+//   4. Hard navigate всех вкладок — следующий load пойдёт через сеть
 
 self.addEventListener('install', (event) => {
-  event.waitUntil(
-    caches.open(CACHE_VERSION).then((cache) => cache.addAll(SHELL_ASSETS))
-  );
-  self.skipWaiting();
+  // skipWaiting в install, чтобы новая версия не висела в waiting state
+  // когда у клиента всё ещё открыта вкладка под старым SW.
+  event.waitUntil(self.skipWaiting());
 });
 
 self.addEventListener('activate', (event) => {
-  event.waitUntil(
-    caches.keys().then((keys) =>
-      Promise.all(keys.filter((k) => k !== CACHE_VERSION).map((k) => caches.delete(k)))
-    )
-  );
-  self.clients.claim();
+  event.waitUntil((async () => {
+    // 1. Сначала забрать контроль — иначе clients.matchAll() пуст
+    //    (новый SW не контролирует никого по умолчанию).
+    await self.clients.claim();
+
+    // 2. Все кэши под нож.
+    const keys = await caches.keys();
+    await Promise.all(keys.map((k) => caches.delete(k)));
+
+    // 3. Найти все вкладки в нашем scope, перезагрузить их.
+    //    Делаем reload ДО unregister, чтобы клиенты ещё видели нас как
+    //    активного SW и согласились на навигацию.
+    const clients = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+    for (const client of clients) {
+      try { await client.navigate(client.url); } catch { /* cross-origin / closed */ }
+    }
+
+    // 4. Снять регистрацию. После этого следующая навигация пойдёт уже
+    //    без SW-прослойки.
+    await self.registration.unregister();
+  })());
 });
 
-self.addEventListener('fetch', (event) => {
-  const req = event.request;
-  if (req.method !== 'GET') return;
-
-  const url = new URL(req.url);
-  if (url.origin !== self.location.origin) return;
-
-  // Never cache the API — places/reviews/etc must be live.
-  if (url.pathname.startsWith('/api/')) return;
-
-  // SPA navigations: try network first so users get fresh HTML; fall back
-  // to the cached shell when offline.
-  if (req.mode === 'navigate') {
-    event.respondWith(
-      fetch(req).catch(() => caches.match('/'))
-    );
-    return;
-  }
-
-  // Static assets (Vite hashes asset filenames, so cache-first is safe — a
-  // new build produces new URLs).
-  event.respondWith(
-    caches.match(req).then((cached) => {
-      if (cached) return cached;
-      return fetch(req).then((res) => {
-        if (res.ok && res.type === 'basic') {
-          const copy = res.clone();
-          caches.open(CACHE_VERSION).then((cache) => cache.put(req, copy));
-        }
-        return res;
-      });
-    })
-  );
+// Никаких fetch-перехватов — пропускаем всё в сеть. Минимальное
+// поведение, пока активный SW всё ещё в процессе самоуничтожения.
+self.addEventListener('fetch', () => {
+  // explicit no-op — браузер пойдёт в сеть напрямую
 });

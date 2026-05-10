@@ -10,14 +10,27 @@ export const useFeedStore = defineStore('feed', () => {
   let timer = null
   let started = false
 
+  function hasToken() {
+    return typeof localStorage !== 'undefined' && !!localStorage.getItem('token')
+  }
+
   async function refresh() {
+    // Не дёргаем фоновый poll, если нет токена — иначе генерим лишние
+    // 401 и (хоть теперь без redirect) зря шумим в логах.
+    if (!hasToken()) return
     try {
       const { data } = await http.get('/feed/unread-count')
       unread.value = data?.count ?? 0
-    } catch { /* ignore — индикатор не должен ломать UX */ }
+    } catch (e) {
+      // 401 → токен протух, но redirect делать не нужно (это фон).
+      // Просто остановим polling: при следующем валидном входе start()
+      // снова запустится через watch isAuthenticated в BottomTabBar.
+      if (e.response?.status === 401) stop()
+    }
   }
 
   async function markSeen() {
+    if (!hasToken()) return
     unread.value = 0
     try { await http.post('/feed/seen') } catch { /* ignore */ }
   }
@@ -26,6 +39,7 @@ export const useFeedStore = defineStore('feed', () => {
 
   function start() {
     if (started || typeof window === 'undefined') return
+    if (!hasToken()) return
     started = true
     refresh()
     // Каждые 60 секунд плюс при возврате фокуса.
