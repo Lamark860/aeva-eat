@@ -469,6 +469,14 @@ const metaLine = computed(() => {
   flex: 1 1 auto;
   min-width: 0;
 }
+/* Ticket-only вариант: бумажная плашка не должна растягиваться на всю
+   full-width-ячейку — иначе торчит широкий белый фон. Сжимаем главную
+   колонку под содержимое; кружочки остаются справа сразу за билетиком,
+   остаток строки — просто бумажный фон ленты. */
+.sb-artifact.no-photo .art-photo-main {
+  flex: 0 1 auto;
+  max-width: 360px;
+}
 .art-kruzhoki {
   position: relative;
   flex: 0 0 auto;
