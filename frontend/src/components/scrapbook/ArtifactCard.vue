@@ -50,6 +50,7 @@
             :key="`tk-${i}-${url}`"
             class="art-kruzhok-layer"
             :style="kruzhokLayerStyle(i)"
+            @click.stop.prevent="onKruzhokClick"
           >
             <video
               class="art-kruzhok-video"
@@ -60,8 +61,9 @@
               disablepictureinpicture
               aria-hidden="true"
               @loadedmetadata="forcePoster"
+              @ended="onVideoEnded"
             ></video>
-            <span class="art-kruzhok-play" aria-hidden="true">▶</span>
+            <span class="art-kruzhok-play" aria-hidden="true"></span>
           </span>
           <span v-if="extraVideos > 0" class="art-kruzhok-extra">+{{ extraVideos }}</span>
         </div>
@@ -126,6 +128,7 @@
             :key="`kr-${i}-${url}`"
             class="art-kruzhok-layer"
             :style="kruzhokLayerStyle(i)"
+            @click.stop.prevent="onKruzhokClick"
           >
             <video
               class="art-kruzhok-video"
@@ -136,8 +139,9 @@
               disablepictureinpicture
               aria-hidden="true"
               @loadedmetadata="forcePoster"
+              @ended="onVideoEnded"
             ></video>
-            <span class="art-kruzhok-play" aria-hidden="true">▶</span>
+            <span class="art-kruzhok-play" aria-hidden="true"></span>
           </span>
           <span v-if="extraVideos > 0" class="art-kruzhok-extra">+{{ extraVideos }}</span>
         </div>
@@ -252,6 +256,30 @@ function forcePoster(ev) {
   const v = ev.target
   if (!v || v.currentTime > 0) return
   try { v.currentTime = 0.1 } catch (_) { /* fail-soft — не критично */ }
+}
+
+// Тап по кружочку играет/паузит видео inline вместо перехода на отзыв.
+// .stop.prevent в шаблоне глушит router-link на родителе. Класс .playing
+// прячет ▶-overlay, чтобы не загораживать картинку при просмотре.
+function onKruzhokClick(ev) {
+  const layer = ev.currentTarget
+  const video = layer.querySelector('video')
+  if (!video) return
+  if (video.paused) {
+    video.play().then(() => layer.classList.add('playing')).catch(() => {})
+  } else {
+    video.pause()
+    layer.classList.remove('playing')
+  }
+}
+
+// Видео доиграло — возвращаем оверлей ▶, чтобы понятно было что можно
+// тапнуть снова. Перематываем к началу для ровного второго просмотра.
+function onVideoEnded(ev) {
+  const v = ev.target
+  if (!v) return
+  v.currentTime = 0
+  v.parentElement?.classList.remove('playing')
 }
 
 const hasRatings = computed(() => {
@@ -500,7 +528,7 @@ const metaLine = computed(() => {
     0 0 0 3px var(--sb-paper-card),
     0 2px 4px rgba(40, 30, 20, 0.18),
     0 6px 14px rgba(40, 30, 20, 0.16);
-  pointer-events: none;        /* клик уходит в parent router-link */
+  cursor: pointer;
 }
 .art-kruzhok-video {
   width: 100%;
@@ -508,17 +536,43 @@ const metaLine = computed(() => {
   object-fit: cover;
   display: block;
 }
+
+/* ▶ — полупрозрачный тёмный диск + белый треугольник по центру.
+   Через ::before (диск) и ::after (треугольник через border-trick).
+   .playing класс прячет оверлей, пока видео идёт. */
 .art-kruzhok-play {
   position: absolute;
   inset: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 15px;
-  color: rgba(255, 255, 255, 0.92);
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.55);
-  line-height: 1;
+  pointer-events: none;
+  transition: opacity 180ms ease;
+
+  &::before {
+    content: '';
+    position: absolute;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: rgba(20, 12, 6, 0.55);
+    backdrop-filter: blur(2px);
+    -webkit-backdrop-filter: blur(2px);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+  }
+  &::after {
+    content: '';
+    position: relative;
+    width: 0;
+    height: 0;
+    border-style: solid;
+    border-width: 5px 0 5px 8px;
+    border-color: transparent transparent transparent #fff;
+    margin-left: 2px;        /* оптический центр треугольника */
+    filter: drop-shadow(0 1px 0.5px rgba(0, 0, 0, 0.25));
+  }
 }
+.art-kruzhok-layer.playing .art-kruzhok-play { opacity: 0; }
 .art-kruzhok-extra {
   position: absolute;
   bottom: -14px;
@@ -530,7 +584,8 @@ const metaLine = computed(() => {
   pointer-events: none;
 }
 
-/* На full-width-ячейке кружочки крупнее — пропорционально под full-width. */
+/* На full-width-ячейке кружочки крупнее — пропорционально под full-width.
+   Диск-плеер тоже растёт чтобы оставаться читаемым. */
 .sb-artifact.has-kruzhok {
   .art-kruzhoki { width: 80px; }
   .art-kruzhok-layer {
@@ -538,6 +593,12 @@ const metaLine = computed(() => {
     height: 70px;
     left: 5px;
   }
-  .art-kruzhok-play { font-size: 18px; }
+  .art-kruzhok-play::before {
+    width: 32px;
+    height: 32px;
+  }
+  .art-kruzhok-play::after {
+    border-width: 6px 0 6px 9px;
+  }
 }
 </style>
