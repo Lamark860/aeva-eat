@@ -43,9 +43,12 @@ type Place struct {
 	IsGemPlace         bool          `json:"is_gem_place"`
 	HasVideo           bool          `json:"has_video"`
 	// VideoURL — последний review.video_url для этого места (если есть).
-	// Фронт нужен, чтобы рендерить кружочек с реальным video-poster, а не
-	// тёмной заглушкой; обновляется автоматически как review добавляются.
+	// Сохранён для совместимости; новый фронт-рендер использует Videos.
 	VideoURL *string `json:"video_url,omitempty"`
+	// Videos — все video_url-ы для этого места, свежие сверху. Фронт рисует
+	// их стопкой круглых кружочков рядом с полароидом (как PolaroidStack
+	// для фото). Пустой массив сериализуется как [].
+	Videos []string `json:"videos,omitempty"`
 	ReviewCount        int           `json:"review_count"`
 	Reviewers          []Reviewer    `json:"reviewers,omitempty"`
 	FeedPhotos         []ReviewPhoto `json:"feed_photos,omitempty"`

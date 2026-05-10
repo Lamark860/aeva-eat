@@ -2,7 +2,7 @@
   <router-link
     :to="`/places/${place.id}`"
     class="sb-artifact"
-    :class="{ featured, 'no-photo': isTicketOnly, 'has-kruzhok': hasKruzhok }"
+    :class="{ featured, 'no-photo': isTicketOnly, 'has-kruzhok': visibleVideos.length > 0 }"
     :aria-label="place.name"
   >
     <!-- A3 — билетик-only артефакт (NEXT.md §A3). Если у места нет ни cover'а,
@@ -43,65 +43,76 @@
       <div v-if="metaLine" class="sb-meta">{{ metaLine }}</div>
     </template>
 
-    <!-- Фото-вариант: полароид одиночный или стопка из 3-х -->
+    <!-- Фото-вариант: полароид (одиночный или стопка) + кружочки видео в столбце справа -->
     <template v-else>
       <div class="art-photo">
-        <Polaroid
-          v-if="!hasStack"
-          :src="place.image_url || ''"
-          :caption="caption"
-          :gem="!!place.is_gem_place"
-          :placeholder="placeholderClass"
-        >
-          <Tape :variant="tapeVariant" :style="tapeStyle" />
-          <span v-if="place.is_gem_place" class="sb-gem-corner">
-            <GemBadge :size="22" />
-          </span>
-        </Polaroid>
-
-        <PolaroidStack
-          v-else
-          :photos="stackPhotos"
-          :placeholder="placeholderClass"
-          :gem="!!place.is_gem_place"
-        >
-          <Tape :variant="tapeVariant" :style="tapeStyle" />
-          <span v-if="place.is_gem_place" class="sb-gem-corner">
-            <GemBadge :size="22" />
-          </span>
-        </PolaroidStack>
-
-        <div v-if="reviewers.length" class="art-people">
-          <span
-            v-for="r in reviewers"
-            :key="r.id"
-            class="r-tag sb-author-tag"
-            :class="[authorColor(r.id), { 'has-photo': !!r.avatar_url }]"
-            :title="r.username"
+        <div class="art-photo-main">
+          <Polaroid
+            v-if="!hasStack"
+            :src="place.image_url || ''"
+            :caption="caption"
+            :gem="!!place.is_gem_place"
+            :placeholder="placeholderClass"
           >
-            <img v-if="r.avatar_url" :src="r.avatar_url" alt="" class="r-ph" />
-            <template v-else>{{ (r.username || '?').slice(0, 1).toUpperCase() }}</template>
-          </span>
-          <span v-if="extraReviewers > 0" class="r-extra">+{{ extraReviewers }}</span>
+            <Tape :variant="tapeVariant" :style="tapeStyle" />
+            <span v-if="place.is_gem_place" class="sb-gem-corner">
+              <GemBadge :size="22" />
+            </span>
+          </Polaroid>
+
+          <PolaroidStack
+            v-else
+            :photos="stackPhotos"
+            :placeholder="placeholderClass"
+            :gem="!!place.is_gem_place"
+          >
+            <Tape :variant="tapeVariant" :style="tapeStyle" />
+            <span v-if="place.is_gem_place" class="sb-gem-corner">
+              <GemBadge :size="22" />
+            </span>
+          </PolaroidStack>
+
+          <div v-if="reviewers.length" class="art-people">
+            <span
+              v-for="r in reviewers"
+              :key="r.id"
+              class="r-tag sb-author-tag"
+              :class="[authorColor(r.id), { 'has-photo': !!r.avatar_url }]"
+              :title="r.username"
+            >
+              <img v-if="r.avatar_url" :src="r.avatar_url" alt="" class="r-ph" />
+              <template v-else>{{ (r.username || '?').slice(0, 1).toUpperCase() }}</template>
+            </span>
+            <span v-if="extraReviewers > 0" class="r-extra">+{{ extraReviewers }}</span>
+          </div>
         </div>
 
-        <!-- Q-video: кружочек видео внахлёст к полароиду. Карточка с реальным
-             video_url в feed-grid становится full-width (см. .doska-cell.has-video
-             в Home), поэтому кружок не теснит соседей и явно «принадлежит»
-             этому месту. preload=metadata + muted+playsinline — браузер вытаскивает
-             первый кадр без автозапуска; iOS требует и то и другое. -->
-        <span v-if="hasKruzhok" class="art-kruzhok">
-          <video
-            class="art-kruzhok-video"
-            :src="place.video_url"
-            preload="metadata"
-            muted
-            playsinline
-            disablepictureinpicture
-            aria-hidden="true"
-          ></video>
-          <span class="art-kruzhok-play" aria-hidden="true">▶</span>
-        </span>
+        <!-- Q-video: видео-кружочки рядом с полароидом «в ряду», стопкой
+             как PolaroidStack — каждый следующий чуть прикрывает предыдущий.
+             preload=metadata + muted+playsinline — браузер вытаскивает первый
+             кадр без автозапуска; iOS требует и то и другое.
+             Видно только при наличии реального video_url (иначе пустой
+             белый круг — что выловил дизайнер). -->
+        <div v-if="visibleVideos.length" class="art-kruzhoki">
+          <span
+            v-for="(url, i) in visibleVideos"
+            :key="`kr-${i}-${url}`"
+            class="art-kruzhok-layer"
+            :style="kruzhokLayerStyle(i)"
+          >
+            <video
+              class="art-kruzhok-video"
+              :src="url"
+              preload="metadata"
+              muted
+              playsinline
+              disablepictureinpicture
+              aria-hidden="true"
+            ></video>
+            <span class="art-kruzhok-play" aria-hidden="true">▶</span>
+          </span>
+          <span v-if="extraVideos > 0" class="art-kruzhok-extra">+{{ extraVideos }}</span>
+        </div>
       </div>
 
       <div v-if="hasStack && caption" class="sb-stack-caption">{{ caption }}</div>
@@ -179,13 +190,31 @@ const extraReviewers = computed(() => Math.max(0, allReviewers.value.length - MA
 const stackPhotos = computed(() => props.place.feed_photos || [])
 const hasStack = computed(() => stackPhotos.value.length >= 2)
 
-// Q-video: рендерим кружок только когда есть РЕАЛЬНЫЙ video_url (а не просто
-// has_video флаг). Иначе при незапущенной/нерефрешнутой бэке появлялась пустая
-// белая подложка вместо видео. Также требуем фото-вариант карточки —
-// билетик-only-режиму кружок прицепить визуально некуда.
-const hasKruzhok = computed(() =>
-  !!props.place.video_url && !isTicketOnly.value
-)
+// Q-video: список всех video_url для места. Бэк отдаёт `videos`
+// (свежие сверху) или fallback `video_url` для старого ответа. Скрываем
+// кружочки в ticket-only-режиме (полароида рядом нет — приклеить некуда).
+const allVideos = computed(() => {
+  if (isTicketOnly.value) return []
+  if (Array.isArray(props.place.videos) && props.place.videos.length > 0) {
+    return props.place.videos
+  }
+  if (props.place.video_url) return [props.place.video_url]
+  return []
+})
+const MAX_VIDEOS = 3
+const visibleVideos = computed(() => allVideos.value.slice(0, MAX_VIDEOS))
+const extraVideos = computed(() => Math.max(0, allVideos.value.length - MAX_VIDEOS))
+
+// Раскладка стопки: каждый следующий кружочек чуть ниже и со встречным
+// наклоном, по аналогии с PolaroidStack.
+function kruzhokLayerStyle(i) {
+  const tilts = ['rotate(-5deg)', 'rotate(4deg)', 'rotate(-3deg)']
+  return {
+    top: `${i * 38}px`,
+    transform: tilts[i % tilts.length],
+    zIndex: i + 1,
+  }
+}
 
 const hasRatings = computed(() => {
   const p = props.place
@@ -225,12 +254,11 @@ const metaLine = computed(() => {
   z-index: 2;
 }
 
-/* Обёртка вокруг полароида/стопки, чтобы стек авторов мог липнуть к её
-   нижнему-левому углу независимо от внутренних transform'ов слоёв. */
-.art-photo {
-  position: relative;
-}
+/* .art-photo — flex-row контейнер: полароид слева, стопка кружочков справа.
+   Описан ниже в Q-video-блоке. */
 
+/* Стек авторов цепляется к низу-левому углу полароидной части (.art-photo-main),
+   а не к flex-контейнеру — иначе его сдвигает рост стопки кружочков. */
 .art-people {
   position: absolute;
   bottom: -10px;
@@ -389,26 +417,41 @@ const metaLine = computed(() => {
   text-overflow: ellipsis;
 }
 
-/* Q-video: кружочек прилипает к нижне-правому углу полароида, чуть заходя
-   на фото. Без сплошной тёмной подложки — внутри живой <video preload=metadata>,
-   браузер вытаскивает первый кадр и показывает его как poster. ▶ маленьким
-   значком сверху, не закрывает картинку. */
-.art-kruzhok {
+/* Q-video: кружочки видео живут в столбце справа от полароида и стопкой
+   накладываются друг на друга (ScreenshotStack-style). Внутри — настоящий
+   <video preload=metadata muted>, браузер рисует первый кадр как natural
+   poster, без сплошной тёмной подложки. */
+.art-photo {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+.art-photo-main {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.art-kruzhoki {
+  position: relative;
+  flex: 0 0 auto;
+  width: 64px;
+  /* высота вычисляется по числу видимых кружков:
+     56px на единственный + 38px на каждый следующий */
+  align-self: stretch;
+}
+.art-kruzhok-layer {
   position: absolute;
-  bottom: -22px;
-  right: -14px;
-  z-index: 5;
-  pointer-events: none;        /* клик уходит в parent router-link */
-  display: inline-block;
+  left: 4px;
   width: 56px;
   height: 56px;
   border-radius: 50%;
   overflow: hidden;
-  transform: rotate(-6deg);
+  background: var(--sb-paper-card);
   box-shadow:
     0 0 0 3px var(--sb-paper-card),
     0 2px 4px rgba(40, 30, 20, 0.18),
     0 6px 14px rgba(40, 30, 20, 0.16);
+  pointer-events: none;        /* клик уходит в parent router-link */
 }
 .art-kruzhok-video {
   width: 100%;
@@ -422,18 +465,30 @@ const metaLine = computed(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 16px;
+  font-size: 15px;
   color: rgba(255, 255, 255, 0.92);
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.55);
   line-height: 1;
 }
+.art-kruzhok-extra {
+  position: absolute;
+  bottom: -14px;
+  right: -2px;
+  font-family: var(--sb-hand);
+  font-size: 14px;
+  color: var(--sb-ink-mute);
+  transform: rotate(-3deg);
+  pointer-events: none;
+}
 
-/* На full-width-ячейке кружочек крупнее — пропорционально под full-width. */
+/* На full-width-ячейке кружочки крупнее — пропорционально под full-width. */
 .sb-artifact.has-kruzhok {
-  .art-kruzhok {
-    width: 72px;
-    height: 72px;
+  .art-kruzhoki { width: 80px; }
+  .art-kruzhok-layer {
+    width: 70px;
+    height: 70px;
+    left: 5px;
   }
-  .art-kruzhok-play { font-size: 20px; }
+  .art-kruzhok-play { font-size: 18px; }
 }
 </style>

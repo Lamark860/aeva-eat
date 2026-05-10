@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/aeva-eat/backend/internal/model"
+	"github.com/lib/pq"
 )
 
 type PlaceRepo struct {
@@ -172,7 +173,13 @@ func (r *PlaceRepo) List(f PlaceFilter) (*PlaceListResult, error) {
 			EXISTS(SELECT 1 FROM reviews rv WHERE rv.place_id = p.id AND rv.video_url IS NOT NULL AND rv.video_url <> '') AS has_video,
 			(SELECT rv.video_url FROM reviews rv
 			   WHERE rv.place_id = p.id AND rv.video_url IS NOT NULL AND rv.video_url <> ''
-			   ORDER BY rv.created_at DESC, rv.id DESC LIMIT 1) AS video_url
+			   ORDER BY rv.created_at DESC, rv.id DESC LIMIT 1) AS video_url,
+			COALESCE(
+				(SELECT array_agg(rv.video_url ORDER BY rv.created_at DESC, rv.id DESC)
+				   FROM reviews rv WHERE rv.place_id = p.id
+				   AND rv.video_url IS NOT NULL AND rv.video_url <> ''),
+				ARRAY[]::TEXT[]
+			) AS videos
 	` + baseFrom + whereClause
 
 	// All ORDER BY clauses end with `p.id DESC` as a stable tiebreaker — without it,
@@ -219,16 +226,18 @@ func (r *PlaceRepo) List(f PlaceFilter) (*PlaceListResult, error) {
 	for rows.Next() {
 		var p model.Place
 		var avgFood, avgService, avgVibe float64
+		var videos pq.StringArray
 		err := rows.Scan(
 			&p.ID, &p.Name, &p.Address, &p.City, &p.Lat, &p.Lng,
 			&p.CuisineTypeID, &p.CuisineType, &p.Website,
 			&p.CreatedBy, &p.ImageURL, &p.CreatedAt, &p.UpdatedAt,
 			&avgFood, &avgService, &avgVibe, &p.ReviewCount,
-			&p.IsGemPlace, &p.HasVideo, &p.VideoURL,
+			&p.IsGemPlace, &p.HasVideo, &p.VideoURL, &videos,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("scan place: %w", err)
 		}
+		p.Videos = []string(videos)
 		if p.ReviewCount > 0 {
 			p.AvgFood = &avgFood
 			p.AvgService = &avgService
@@ -280,7 +289,13 @@ func (r *PlaceRepo) GetByID(id int) (*model.Place, error) {
 			EXISTS(SELECT 1 FROM reviews rv WHERE rv.place_id = p.id AND rv.video_url IS NOT NULL AND rv.video_url <> '') AS has_video,
 			(SELECT rv.video_url FROM reviews rv
 			   WHERE rv.place_id = p.id AND rv.video_url IS NOT NULL AND rv.video_url <> ''
-			   ORDER BY rv.created_at DESC, rv.id DESC LIMIT 1) AS video_url
+			   ORDER BY rv.created_at DESC, rv.id DESC LIMIT 1) AS video_url,
+			COALESCE(
+				(SELECT array_agg(rv.video_url ORDER BY rv.created_at DESC, rv.id DESC)
+				   FROM reviews rv WHERE rv.place_id = p.id
+				   AND rv.video_url IS NOT NULL AND rv.video_url <> ''),
+				ARRAY[]::TEXT[]
+			) AS videos
 		FROM places p
 		LEFT JOIN cuisine_types ct ON ct.id = p.cuisine_type_id
 		LEFT JOIN (
@@ -297,7 +312,7 @@ func (r *PlaceRepo) GetByID(id int) (*model.Place, error) {
 		&p.CuisineTypeID, &p.CuisineType, &p.Website,
 		&p.CreatedBy, &p.ImageURL, &p.CreatedAt, &p.UpdatedAt,
 		&avgFood, &avgService, &avgVibe, &p.ReviewCount,
-		&p.IsGemPlace, &p.HasVideo, &p.VideoURL,
+		&p.IsGemPlace, &p.HasVideo, &p.VideoURL, (*pq.StringArray)(&p.Videos),
 	)
 	if err != nil {
 		return nil, err

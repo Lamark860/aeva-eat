@@ -33,7 +33,7 @@
               cellTilt(item),
               {
                 featured: isFeatured(item, buckets.current.items),
-                'has-video': item._kind === 'place' && !!item.video_url,
+                'has-video': item._kind === 'place' && !!(item.videos?.length || item.video_url),
               },
             ]"
           >
@@ -105,7 +105,7 @@
                     cellTilt(item),
                     {
                       featured: isFeatured(item, b.items),
-                      'has-video': item._kind === 'place' && !!item.video_url,
+                      'has-video': item._kind === 'place' && !!(item.videos?.length || item.video_url),
                     },
                   ]"
                   :style="{ '--i': i }"
