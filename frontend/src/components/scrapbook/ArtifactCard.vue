@@ -7,36 +7,63 @@
   >
     <!-- A3 — билетик-only артефакт (NEXT.md §A3). Если у места нет ни cover'а,
          ни review-фото, но есть рейтинги — рендерим компактный билетик
-         вместо пустого полароида. Ритм ленты оживает чередованием. -->
+         вместо пустого полароида. Ритм ленты оживает чередованием.
+         Кружочки видео тут тоже могут быть — выносим в общий flex-row. -->
     <template v-if="isTicketOnly">
-      <div class="art-ticket-card">
-        <header class="tc-head">
-          <h3 class="tc-name">{{ place.name }}</h3>
-          <Stamp v-if="place.city" kind="ink" class="tc-stamp">{{ place.city }}</Stamp>
-          <Stamp v-if="place.is_gem_place" kind="gem" class="tc-stamp">жемчужина</Stamp>
-        </header>
+      <div class="art-photo">
+        <div class="art-photo-main">
+          <div class="art-ticket-card">
+            <header class="tc-head">
+              <h3 class="tc-name">{{ place.name }}</h3>
+              <Stamp v-if="place.city" kind="ink" class="tc-stamp">{{ place.city }}</Stamp>
+              <Stamp v-if="place.is_gem_place" kind="gem" class="tc-stamp">жемчужина</Stamp>
+            </header>
 
-        <Ticket
-          :compact="!featured"
-          :food="place.avg_food"
-          :service="place.avg_service"
-          :vibe="place.avg_vibe"
-        />
+            <Ticket
+              :compact="!featured"
+              :food="place.avg_food"
+              :service="place.avg_service"
+              :vibe="place.avg_vibe"
+            />
 
-        <div v-if="caption" class="tc-cap">{{ caption }}</div>
+            <div v-if="caption" class="tc-cap">{{ caption }}</div>
 
-        <div v-if="reviewers.length" class="art-people inline">
+            <div v-if="reviewers.length" class="art-people inline">
+              <span
+                v-for="r in reviewers"
+                :key="r.id"
+                class="r-tag sb-author-tag"
+                :class="[authorColor(r.id), { 'has-photo': !!r.avatar_url }]"
+                :title="r.username"
+              >
+                <img v-if="r.avatar_url" :src="r.avatar_url" alt="" class="r-ph" />
+                <template v-else>{{ (r.username || '?').slice(0, 1).toUpperCase() }}</template>
+              </span>
+              <span v-if="extraReviewers > 0" class="r-extra">+{{ extraReviewers }}</span>
+            </div>
+          </div>
+        </div>
+
+        <div v-if="visibleVideos.length" class="art-kruzhoki">
           <span
-            v-for="r in reviewers"
-            :key="r.id"
-            class="r-tag sb-author-tag"
-            :class="[authorColor(r.id), { 'has-photo': !!r.avatar_url }]"
-            :title="r.username"
+            v-for="(url, i) in visibleVideos"
+            :key="`tk-${i}-${url}`"
+            class="art-kruzhok-layer"
+            :style="kruzhokLayerStyle(i)"
           >
-            <img v-if="r.avatar_url" :src="r.avatar_url" alt="" class="r-ph" />
-            <template v-else>{{ (r.username || '?').slice(0, 1).toUpperCase() }}</template>
+            <video
+              class="art-kruzhok-video"
+              :src="url"
+              preload="metadata"
+              muted
+              playsinline
+              disablepictureinpicture
+              aria-hidden="true"
+              @loadedmetadata="forcePoster"
+            ></video>
+            <span class="art-kruzhok-play" aria-hidden="true">▶</span>
           </span>
-          <span v-if="extraReviewers > 0" class="r-extra">+{{ extraReviewers }}</span>
+          <span v-if="extraVideos > 0" class="art-kruzhok-extra">+{{ extraVideos }}</span>
         </div>
       </div>
 
@@ -192,10 +219,10 @@ const stackPhotos = computed(() => props.place.feed_photos || [])
 const hasStack = computed(() => stackPhotos.value.length >= 2)
 
 // Q-video: список всех video_url для места. Бэк отдаёт `videos`
-// (свежие сверху) или fallback `video_url` для старого ответа. Скрываем
-// кружочки в ticket-only-режиме (полароида рядом нет — приклеить некуда).
+// (свежие сверху) или fallback `video_url` для старого ответа. Стопка
+// кружочков рендерится и в ticket-only-режиме — flex-row даёт ей колонку
+// справа независимо от того, что внутри (полароид или билетик).
 const allVideos = computed(() => {
-  if (isTicketOnly.value) return []
   if (Array.isArray(props.place.videos) && props.place.videos.length > 0) {
     return props.place.videos
   }
@@ -457,10 +484,9 @@ const metaLine = computed(() => {
   height: 56px;
   border-radius: 50%;
   overflow: hidden;
-  /* Без сплошного фона — пока видео не подтянуло первый кадр, кружок
-     должен быть прозрачным, чтобы не торчала белая «дыра». Бумажное
-     кольцо вокруг даёт скрапбук-вид (как у Polaroid'а), внутреннюю
-     поверхность отрисовывает само <video>. */
+  /* Прозрачный фон — пока видео не подтянуло первый кадр, кружок не
+     должен торчать как белая «дыра». Бумажное кольцо вокруг даёт
+     скрапбук-вид; первый кадр вытягивается через @loadedmetadata seek. */
   background: transparent;
   box-shadow:
     0 0 0 3px var(--sb-paper-card),
