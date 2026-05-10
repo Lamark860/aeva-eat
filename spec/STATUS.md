@@ -484,3 +484,75 @@ G3. **«+ Добавить» 5-я вкладка** — сейчас 4 таба, 
 - При обёртывании expanded-архив-секции в `<Transition>` для Q10 потерял `v-else` — секция рендерилась одновременно с CollapsedStrip. Восстановлено `v-if="isExpanded(b.key)"`
 - Edge-cases (длинные имена, пустые состояния)
 - A11y-проход (screen-reader labels, focus rings)
+
+---
+
+## Раунд 5.1 — итерации по видео-кружкам и группировке (2026-05-10)
+
+После первой пары коммитов R5 пошли итерации по видео-кружочкам и
+event-driven фиду. Все коммиты `f8e8b04 → 22e314f`.
+
+### Видео-кружочки на Доске
+- **Стопка вместо угла-overlay.** ArtifactCard теперь flex-row:
+  `.art-photo-main` (полароид/билетик слева) + `.art-kruzhoki` (кружочки
+  справа стопкой). До 3 видимых, остальные → рукописное `+N`. Каждый
+  кружок рендерится с offset `top: i*38px` и встречным rotation —
+  визуальный аналог `PolaroidStack` по вертикали
+- **Множественные видео.** `Place.Videos []string` (и `FeedEvent.VideoURL`
+  per-review) — фронт собирает per-event и кладёт в карточку дня. Видео
+  одного отзыва не расширяет соседние визиты места
+- **Inline-play вместо перехода.** Тап на кружочек глушится
+  `@click.stop.prevent` и играет/паузит видео в том же DOM-узле. Класс
+  `.playing` прячет ▶, на `ended` перематываем в 0
+- **▶-индикатор**: тёмный disc с backdrop-blur + белый CSS-треугольник
+  через ::before/::after, оба absolute-центрированы. Раньше ::before
+  с position:absolute в flex-родителе уезжал в угол
+- **iOS/Chrome poster fix.** preload=metadata не всегда красит первый
+  кадр — `@loadedmetadata="forcePoster"` сикает на 0.1s. Сам `<video>`
+  получил `border-radius: 50%` — Chrome не клипает video через
+  transformed parent
+- **Ticket-only тоже получает кружок.** Раньше `isTicketOnly`-ветка
+  пропускала kruzhok-стэк; теперь обе ветки оборачиваются в общий
+  `.art-photo` flex-row
+- **Full-width не растягивает билетик.** `.sb-artifact.no-photo
+  .art-photo-main { flex: 0 1 auto; max-width: 360px }` — белая
+  плашка-билетик не растекается на всю строку
+
+### Q4 grouping refinements
+- **Ключ группы** `(place_id, day)` — без `attendees`. Два отзыва
+  одного места в один день мерджатся в одну карточку с union-attendees
+  (Пижоны: lamark + alina на одной плитке вместо двух)
+- **Per-event рейтинги.** `FeedEvent.{FoodRating,ServiceRating,VibeRating}`
+  → useFeed усредняет внутри группы → `avg_food/service/vibe` на
+  карточке отражают именно этот визит, а не глобальное среднее места
+- **Per-event дата.** `created_at` на artifact'е переопределяется на
+  самое раннее `occurred_at` группы — caption «Place · сб/вс» теперь
+  правильный в каждой карточке
+- **Avatars fallback.** Если `_attendees` пустой, ArtifactCard
+  fallback'ит на `place.reviewers` — не остаёмся без аватарок при
+  транзиентной ошибке `/api/users`
+
+### Hot fixes
+- **пустой белый кружок** — `hasKruzhok` гейтится на реальный
+  `video_url`, не на `has_video` флаг. Без URL кружок не рендерится
+- **дублирование архива** — потерянный `v-else` в expanded-секции
+- **репо-гигиена** — добавлен `.gitignore` (`node_modules/`, `*.log`,
+  `.DS_Store`, `.env*`); до этого коммиты тащили node_modules
+- **FOUC старого дизайна** — `await router.isReady()` перед
+  `app.mount('#app')` + paper-bg на body с первого кадра. Без этого
+  на первый рендер `route.meta.scrapbook` ещё `undefined` →
+  Bootstrap-навбар мигал перед переключением на скрапбук-режим
+
+### Бекенд-дельта (commits `1dc6e36 → bd1a3f8`)
+- `Place.Videos []string` — array_agg всех `review.video_url`, свежие
+  сверху. `pq.StringArray` для скана. Сохранён `VideoURL *string` для
+  совместимости
+- `FeedEvent.{VideoURL, FoodRating, ServiceRating, VibeRating}` —
+  per-review subqueries в feed_events List()
+- `FeedEvent.Attendees []int` — `array_agg(review_authors.user_id)`
+  с CASE-fallback на author_id для note_added
+
+### State
+Все 9 пунктов R4 + расширения R5.1 в проде после
+`docker compose build backend && docker compose up -d backend`.
+Открытые follow-ups в `OPEN-QUESTIONS.md` (R5-Q1..Q6, все с дефолтами).

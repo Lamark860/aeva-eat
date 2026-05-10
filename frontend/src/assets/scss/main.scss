@@ -61,6 +61,9 @@ body {
   -moz-osx-font-smoothing: grayscale;
   // Prevent accidental horizontal scroll caused by occasional overflowing rows.
   overflow-x: hidden;
+  // Paper-цвет с самого первого кадра (а не Bootstrap'овский $body-bg) —
+  // пока Vue не примонтировался, фон уже скрапбучный, никакого белого.
+  background: oklch(0.965 0.018 82);
 }
 
 // =============================================
