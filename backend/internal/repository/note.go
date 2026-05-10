@@ -4,6 +4,7 @@ import (
 	"database/sql"
 
 	"github.com/aeva-eat/backend/internal/model"
+	"github.com/lib/pq"
 )
 
 type NoteRepo struct {
@@ -220,14 +221,26 @@ func (r *FeedEventsRepo) MarkSeen(userID int) error {
 
 // List возвращает события ленты, свежие сверху. Пагинация по timestamp
 // (cursor) — опциональна; пока без неё, лимитируем на server-side.
+// Q4 — каждое событие тащит attendees: для review_added берём всех co-authors,
+// для note_added это единственный author. Фронт группирует по
+// (place_id, date(occurred_at), attendees) — это и закрывает «раз в месяц
+// в одно и то же место» как отдельные артефакты, а не одну плитку.
 func (r *FeedEventsRepo) List(limit int) ([]model.FeedEvent, error) {
 	if limit <= 0 || limit > 200 {
 		limit = 100
 	}
 	rows, err := r.db.Query(`
-		SELECT kind, event_id, occurred_at, place_id, author_id, review_id, note_id
-		FROM feed_events
-		ORDER BY occurred_at DESC, event_id DESC
+		SELECT e.kind, e.event_id, e.occurred_at, e.place_id, e.author_id, e.review_id, e.note_id,
+			COALESCE(
+				(SELECT array_agg(ra.user_id ORDER BY ra.user_id)
+					FROM review_authors ra WHERE ra.review_id = e.review_id),
+				CASE WHEN e.author_id IS NOT NULL
+					THEN ARRAY[e.author_id]::BIGINT[]
+					ELSE ARRAY[]::BIGINT[]
+				END
+			) AS attendees
+		FROM feed_events e
+		ORDER BY e.occurred_at DESC, e.event_id DESC
 		LIMIT $1
 	`, limit)
 	if err != nil {
@@ -238,9 +251,14 @@ func (r *FeedEventsRepo) List(limit int) ([]model.FeedEvent, error) {
 	events := []model.FeedEvent{}
 	for rows.Next() {
 		var e model.FeedEvent
+		var attendees pq.Int64Array
 		if err := rows.Scan(&e.Kind, &e.EventID, &e.OccurredAt,
-			&e.PlaceID, &e.AuthorID, &e.ReviewID, &e.NoteID); err != nil {
+			&e.PlaceID, &e.AuthorID, &e.ReviewID, &e.NoteID, &attendees); err != nil {
 			return nil, err
+		}
+		e.Attendees = make([]int, len(attendees))
+		for i, v := range attendees {
+			e.Attendees[i] = int(v)
 		}
 		events = append(events, e)
 	}

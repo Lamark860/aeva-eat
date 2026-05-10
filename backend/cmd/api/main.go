@@ -62,6 +62,7 @@ func main() {
 	inviteHandler := handler.NewInviteHandler(inviteRepo, userRepo)
 	noteHandler := handler.NewNoteHandler(noteRepo, feedRepo)
 	aggHandler := handler.NewAggregateHandler(aggRepo, placeRepo)
+	shareHandler := handler.NewShareHandler(placeRepo)
 
 	// Router
 	r := chi.NewRouter()
@@ -93,6 +94,11 @@ func main() {
 
 	// Validate invite (public, no auth needed)
 	r.Get("/api/invites/validate/{code}", inviteHandler.ValidateCode)
+
+	// DESIGN-DECISIONS Q3 — публичные share-страницы /p/<id>. Без auth, HTML
+	// с OG-метатегами для preview в мессенджерах. nginx проксирует /p/<digits>
+	// на бэк (см. nginx/nginx.conf).
+	r.Get("/p/{id}", shareHandler.Render)
 
 	// All data routes require auth
 	r.Group(func(r chi.Router) {

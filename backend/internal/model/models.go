@@ -42,11 +42,44 @@ type Place struct {
 	ImageURL           *string       `json:"image_url,omitempty"`
 	IsGemPlace         bool          `json:"is_gem_place"`
 	HasVideo           bool          `json:"has_video"`
+	// VideoURL — последний review.video_url для этого места (если есть).
+	// Фронт нужен, чтобы рендерить кружочек с реальным video-poster, а не
+	// тёмной заглушкой; обновляется автоматически как review добавляются.
+	VideoURL *string `json:"video_url,omitempty"`
 	ReviewCount        int           `json:"review_count"`
 	Reviewers          []Reviewer    `json:"reviewers,omitempty"`
 	FeedPhotos         []ReviewPhoto `json:"feed_photos,omitempty"`
-	CreatedAt          time.Time     `json:"created_at"`
-	UpdatedAt          time.Time     `json:"updated_at"`
+	// DESIGN-DECISIONS Q2 — populated only on GET /api/places/:id (not on list).
+	GemStatus      *GemStatus       `json:"gem_status,omitempty"`
+	Attendance     []Attendance     `json:"attendance,omitempty"`
+	RatingsPerUser []RatingsPerUser `json:"ratings_per_user,omitempty"`
+	CreatedAt      time.Time        `json:"created_at"`
+	UpdatedAt      time.Time        `json:"updated_at"`
+}
+
+// GemStatus — кто первый отметил место жемчужиной + остальные «подписавшиеся».
+// Q2: рукописная подпись «отметила Аня · 12 марта (+ Серёжа, Миша)» под штампом.
+type GemStatus struct {
+	MarkedBy      []Reviewer `json:"marked_by"`
+	FirstMarkedAt time.Time  `json:"first_marked_at"`
+}
+
+// Attendance — кто и сколько раз был. ×N рендерится рукописным Caveat.
+type Attendance struct {
+	UserID     int     `json:"user_id"`
+	Username   string  `json:"username"`
+	AvatarURL  *string `json:"avatar_url,omitempty"`
+	VisitCount int     `json:"visit_count"`
+}
+
+// RatingsPerUser — усреднённые оценки этого пользователя по всем визитам в это место.
+// Только для бэка: сортировка `rating_user:N` + потенциальная мини-сравнялка
+// «Аня: 9/8/9 · ты: 7/7/8» в шапке (в next).
+type RatingsPerUser struct {
+	UserID  int      `json:"user_id"`
+	Food    *float64 `json:"food,omitempty"`
+	Service *float64 `json:"service,omitempty"`
+	Vibe    *float64 `json:"vibe,omitempty"`
 }
 
 type Reviewer struct {
@@ -138,6 +171,9 @@ type FeedWeek struct {
 
 // FeedEvent — строка из VIEW feed_events. Объединяет review_added /
 // note_added в одну хронологию. Поля review_id и note_id взаимоисключающие.
+// Attendees — все участники события (для review_added это co-authors;
+// для note_added — единственный автор). Нужно для Q4-группировки на фронте
+// по (place_id, дата, набор-участников).
 type FeedEvent struct {
 	Kind       string    `json:"kind"`
 	EventID    int       `json:"event_id"`
@@ -146,6 +182,7 @@ type FeedEvent struct {
 	AuthorID   *int      `json:"author_id,omitempty"`
 	ReviewID   *int      `json:"review_id,omitempty"`
 	NoteID     *int      `json:"note_id,omitempty"`
+	Attendees  []int     `json:"attendees,omitempty"`
 }
 
 // CityAggregate — строка для /api/cities: имя города + счётчики мест,
@@ -162,14 +199,19 @@ type CityAggregate struct {
 // Содержит то, что не стыдно показать гостю круга: статистики посещений,
 // жемчужин и городов. Email/role/password остаются на User.
 type UserProfile struct {
-	ID            int     `json:"id"`
-	Username      string  `json:"username"`
-	DisplayName   *string `json:"display_name,omitempty"`
-	AvatarURL     *string `json:"avatar_url,omitempty"`
-	PlaceCount    int     `json:"place_count"`
-	GemCount      int     `json:"gem_count"`
-	CityCount     int     `json:"city_count"`
-	ReviewCount   int     `json:"review_count"`
+	ID                   int     `json:"id"`
+	Username             string  `json:"username"`
+	DisplayName          *string `json:"display_name,omitempty"`
+	AvatarURL            *string `json:"avatar_url,omitempty"`
+	PlaceCount           int     `json:"place_count"`
+	GemCount             int     `json:"gem_count"`
+	CityCount            int     `json:"city_count"`
+	ReviewCount          int     `json:"review_count"`
+	// FavoriteCuisine — самая частая кухня по визитам пользователя. nil, если
+	// у мест нет cuisine_type_id или у пользователя ещё нет визитов.
+	// Фронт рендерит как «любит грузинскую — N раз» (рукописно, с глаголом).
+	FavoriteCuisine      *string `json:"favorite_cuisine,omitempty"`
+	FavoriteCuisineCount int     `json:"favorite_cuisine_count,omitempty"`
 }
 
 // UserCity — город визитов конкретного пользователя.

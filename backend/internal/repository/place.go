@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/aeva-eat/backend/internal/model"
 )
@@ -168,7 +169,10 @@ func (r *PlaceRepo) List(f PlaceFilter) (*PlaceListResult, error) {
 			COALESCE(rs.avg_food, 0), COALESCE(rs.avg_service, 0), COALESCE(rs.avg_vibe, 0),
 			COALESCE(rs.review_count, 0),
 			EXISTS(SELECT 1 FROM reviews rv WHERE rv.place_id = p.id AND rv.is_gem = true) AS is_gem_place,
-			EXISTS(SELECT 1 FROM reviews rv WHERE rv.place_id = p.id AND rv.video_url IS NOT NULL AND rv.video_url <> '') AS has_video
+			EXISTS(SELECT 1 FROM reviews rv WHERE rv.place_id = p.id AND rv.video_url IS NOT NULL AND rv.video_url <> '') AS has_video,
+			(SELECT rv.video_url FROM reviews rv
+			   WHERE rv.place_id = p.id AND rv.video_url IS NOT NULL AND rv.video_url <> ''
+			   ORDER BY rv.created_at DESC, rv.id DESC LIMIT 1) AS video_url
 	` + baseFrom + whereClause
 
 	// All ORDER BY clauses end with `p.id DESC` as a stable tiebreaker — without it,
@@ -220,7 +224,7 @@ func (r *PlaceRepo) List(f PlaceFilter) (*PlaceListResult, error) {
 			&p.CuisineTypeID, &p.CuisineType, &p.Website,
 			&p.CreatedBy, &p.ImageURL, &p.CreatedAt, &p.UpdatedAt,
 			&avgFood, &avgService, &avgVibe, &p.ReviewCount,
-			&p.IsGemPlace, &p.HasVideo,
+			&p.IsGemPlace, &p.HasVideo, &p.VideoURL,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("scan place: %w", err)
@@ -273,7 +277,10 @@ func (r *PlaceRepo) GetByID(id int) (*model.Place, error) {
 			COALESCE(rs.avg_food, 0), COALESCE(rs.avg_service, 0), COALESCE(rs.avg_vibe, 0),
 			COALESCE(rs.review_count, 0),
 			EXISTS(SELECT 1 FROM reviews rv WHERE rv.place_id = p.id AND rv.is_gem = true) AS is_gem_place,
-			EXISTS(SELECT 1 FROM reviews rv WHERE rv.place_id = p.id AND rv.video_url IS NOT NULL AND rv.video_url <> '') AS has_video
+			EXISTS(SELECT 1 FROM reviews rv WHERE rv.place_id = p.id AND rv.video_url IS NOT NULL AND rv.video_url <> '') AS has_video,
+			(SELECT rv.video_url FROM reviews rv
+			   WHERE rv.place_id = p.id AND rv.video_url IS NOT NULL AND rv.video_url <> ''
+			   ORDER BY rv.created_at DESC, rv.id DESC LIMIT 1) AS video_url
 		FROM places p
 		LEFT JOIN cuisine_types ct ON ct.id = p.cuisine_type_id
 		LEFT JOIN (
@@ -290,7 +297,7 @@ func (r *PlaceRepo) GetByID(id int) (*model.Place, error) {
 		&p.CuisineTypeID, &p.CuisineType, &p.Website,
 		&p.CreatedBy, &p.ImageURL, &p.CreatedAt, &p.UpdatedAt,
 		&avgFood, &avgService, &avgVibe, &p.ReviewCount,
-		&p.IsGemPlace, &p.HasVideo,
+		&p.IsGemPlace, &p.HasVideo, &p.VideoURL,
 	)
 	if err != nil {
 		return nil, err
@@ -328,6 +335,27 @@ func (r *PlaceRepo) GetByID(id int) (*model.Place, error) {
 		return nil, err
 	}
 	p.FeedPhotos = photos
+
+	// Q2 — gem-status + attendance + ratings-per-user живут только на детальной
+	// карточке места. Каждое поле — отдельный SQL ради ясности; payload growth
+	// маленький, а GetByID вызывается редко.
+	gemStatus, err := r.getGemStatus(id)
+	if err != nil {
+		return nil, err
+	}
+	p.GemStatus = gemStatus
+
+	attendance, err := r.getAttendance(id)
+	if err != nil {
+		return nil, err
+	}
+	p.Attendance = attendance
+
+	ratings, err := r.getRatingsPerUser(id)
+	if err != nil {
+		return nil, err
+	}
+	p.RatingsPerUser = ratings
 
 	return p, rows.Err()
 }
@@ -504,6 +532,109 @@ func (r *PlaceRepo) getFeedPhotos(placeID int) ([]model.ReviewPhoto, error) {
 		photos = append(photos, p)
 	}
 	return photos, rows.Err()
+}
+
+// getGemStatus — Q2: «отметила Аня · 12 марта (+ Серёжа, Миша)». Список собран
+// в порядке первой gem-отметки каждого автора; first_marked_at — самая ранняя.
+func (r *PlaceRepo) getGemStatus(placeID int) (*model.GemStatus, error) {
+	rows, err := r.db.Query(`
+		SELECT u.id, u.username, u.avatar_url, MIN(rv.created_at) AS first_at
+		FROM reviews rv
+		JOIN review_authors ra ON ra.review_id = rv.id
+		JOIN users u ON u.id = ra.user_id
+		WHERE rv.place_id = $1 AND rv.is_gem = true
+		GROUP BY u.id, u.username, u.avatar_url
+		ORDER BY first_at ASC, u.username ASC
+	`, placeID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	gs := &model.GemStatus{MarkedBy: []model.Reviewer{}}
+	first := true
+	for rows.Next() {
+		var rev model.Reviewer
+		var firstAt time.Time
+		if err := rows.Scan(&rev.ID, &rev.Username, &rev.AvatarURL, &firstAt); err != nil {
+			return nil, err
+		}
+		if first {
+			gs.FirstMarkedAt = firstAt
+			first = false
+		}
+		gs.MarkedBy = append(gs.MarkedBy, rev)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if len(gs.MarkedBy) == 0 {
+		return nil, nil
+	}
+	return gs, nil
+}
+
+// getAttendance — список «кто был и сколько раз». Под общим тикетом рисуется
+// ряд `аватарка · ×N` (N рукописно).
+func (r *PlaceRepo) getAttendance(placeID int) ([]model.Attendance, error) {
+	rows, err := r.db.Query(`
+		SELECT u.id, u.username, u.avatar_url, COUNT(rv.id) AS visit_count
+		FROM users u
+		JOIN review_authors ra ON ra.user_id = u.id
+		JOIN reviews rv ON rv.id = ra.review_id
+		WHERE rv.place_id = $1
+		GROUP BY u.id, u.username, u.avatar_url
+		ORDER BY visit_count DESC, u.username ASC
+	`, placeID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	out := []model.Attendance{}
+	for rows.Next() {
+		var a model.Attendance
+		if err := rows.Scan(&a.UserID, &a.Username, &a.AvatarURL, &a.VisitCount); err != nil {
+			return nil, err
+		}
+		out = append(out, a)
+	}
+	return out, rows.Err()
+}
+
+// getRatingsPerUser — средние оценки каждого пользователя по этому месту.
+// Используется только бэком (sort=rating_user:N) и для будущей фичи
+// мини-сравнения; UI таблицу не рисует.
+func (r *PlaceRepo) getRatingsPerUser(placeID int) ([]model.RatingsPerUser, error) {
+	rows, err := r.db.Query(`
+		SELECT ra.user_id,
+			AVG(rv.food_rating)::numeric(3,1)    AS food,
+			AVG(rv.service_rating)::numeric(3,1) AS service,
+			AVG(rv.vibe_rating)::numeric(3,1)    AS vibe
+		FROM reviews rv
+		JOIN review_authors ra ON ra.review_id = rv.id
+		WHERE rv.place_id = $1
+		GROUP BY ra.user_id
+		ORDER BY ra.user_id
+	`, placeID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	out := []model.RatingsPerUser{}
+	for rows.Next() {
+		var r model.RatingsPerUser
+		var food, service, vibe float64
+		if err := rows.Scan(&r.UserID, &food, &service, &vibe); err != nil {
+			return nil, err
+		}
+		r.Food = &food
+		r.Service = &service
+		r.Vibe = &vibe
+		out = append(out, r)
+	}
+	return out, rows.Err()
 }
 
 func (r *PlaceRepo) getReviewers(placeID int) ([]model.Reviewer, error) {

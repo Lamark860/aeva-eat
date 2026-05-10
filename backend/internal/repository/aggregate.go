@@ -170,6 +170,30 @@ func (r *AggregateRepo) UserProfile(userID int) (*model.UserProfile, error) {
 		}
 		return nil, err
 	}
+
+	// DESIGN-DECISIONS Q8: «любит грузинскую — 11 раз» — берём самую
+	// частую кухню по визитам пользователя. Считаем по review_authors,
+	// чтобы соавторы тоже получили эту кухню в свой профиль.
+	cuisineRow := r.db.QueryRow(`
+		SELECT ct.name, COUNT(*)
+		FROM reviews rv
+		JOIN review_authors ra ON ra.review_id = rv.id
+		JOIN places p ON p.id = rv.place_id
+		JOIN cuisine_types ct ON ct.id = p.cuisine_type_id
+		WHERE ra.user_id = $1
+		GROUP BY ct.id, ct.name
+		ORDER BY COUNT(*) DESC, ct.name ASC
+		LIMIT 1
+	`, userID)
+	var cuisine string
+	var cuisineCount int
+	if err := cuisineRow.Scan(&cuisine, &cuisineCount); err == nil {
+		p.FavoriteCuisine = &cuisine
+		p.FavoriteCuisineCount = cuisineCount
+	} else if err != sql.ErrNoRows {
+		return nil, err
+	}
+
 	return &p, nil
 }
 
