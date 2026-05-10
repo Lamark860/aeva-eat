@@ -108,6 +108,7 @@
               playsinline
               disablepictureinpicture
               aria-hidden="true"
+              @loadedmetadata="forcePoster"
             ></video>
             <span class="art-kruzhok-play" aria-hidden="true">▶</span>
           </span>
@@ -214,6 +215,16 @@ function kruzhokLayerStyle(i) {
     transform: tilts[i % tilts.length],
     zIndex: i + 1,
   }
+}
+
+// preload=metadata в Safari/Chrome не всегда отрисовывает первый кадр —
+// видим прозрачный <video>. Принудительный seek на 0.1s заставляет браузер
+// декодировать и нарисовать кадр. Срабатывает один раз на loadedmetadata,
+// после чего отписываемся (если currentTime уже двинулся — кадр нарисован).
+function forcePoster(ev) {
+  const v = ev.target
+  if (!v || v.currentTime > 0) return
+  try { v.currentTime = 0.1 } catch (_) { /* fail-soft — не критично */ }
 }
 
 const hasRatings = computed(() => {
@@ -446,7 +457,11 @@ const metaLine = computed(() => {
   height: 56px;
   border-radius: 50%;
   overflow: hidden;
-  background: var(--sb-paper-card);
+  /* Без сплошного фона — пока видео не подтянуло первый кадр, кружок
+     должен быть прозрачным, чтобы не торчала белая «дыра». Бумажное
+     кольцо вокруг даёт скрапбук-вид (как у Polaroid'а), внутреннюю
+     поверхность отрисовывает само <video>. */
+  background: transparent;
   box-shadow:
     0 0 0 3px var(--sb-paper-card),
     0 2px 4px rgba(40, 30, 20, 0.18),
