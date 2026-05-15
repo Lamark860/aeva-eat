@@ -1,5 +1,107 @@
 # Changelog
 
+## [0.21.1] — 2026-05-10 — Полировка кружков, FOUC, группировка фида
+
+### Исправлено
+- **Видео-кружок рендерился квадратом** через transformed parent — добавлен `border-radius: 50%` на сам `<video>`, Chrome перестал клипать
+- **Пустой белый кружок без видео** — `hasKruzhok` гейтится на реальный `video_url`, не на флаг `has_video`
+- **Ticket-only артефакт** растягивался на всю строку при наличии видео — `max-width: 360px`
+- **Per-event рейтинги и дата** — каждая карточка дня отражает рейтинги именно этого визита, а не среднее по месту
+- **▶-индикатор** на видео-кружке — тёмный disc с backdrop-blur, белый CSS-треугольник, всегда центрирован
+- **FOUC Bootstrap-навбара** на первом рендере — `await router.isReady()` перед `app.mount()`, paper-bg на body
+- **Дублирование архивных секций** — потерянный `v-else` в expanded-секции восстановлен
+- **iOS/Chrome poster** для видео — `@loadedmetadata="forcePoster"` сикает на 0.1s
+
+### Добавлено
+- **Inline-play видео-кружков** — тап играет/паузит в том же DOM-узле, без перехода на /places/:id
+- **Стопка кружков справа от полароида** — мульти-видео: до 3 видимых, остальные → рукописное `+N`, offset `top: i*38px`
+- **Группировка по `(place_id, day)`** — два отзыва одного места в один день мерджатся в одну карточку с union-attendees
+
+## [0.21.0] — 2026-05-10 — Раунд 5: ответы дизайнера, wishlist на Доске, шаринг /p/:id
+
+### Добавлено
+- **WishlistArtifact** на Доске: активный (paper + терра-штамп «план» + канцелярская кнопка), зачёркнутый (paper-deep + moss-штамп «сходили ✓» + SVG-волнистый штрих + мини-полароид визита)
+- **`/p/:id`** — публичная preview-страница для шаринга в мессенджерах (Go-handler без auth, `html/template`, OG/Twitter meta). Без рейтингов и без имён авторов
+- **Расширенный `/api/places/:id`**: `gem_status` (отметил X · дата + соавторы), `attendance` (visit_count), `ratings_per_user` (бэк-фундамент). UI: рукописная подпись «отметил(а)…» под штампом жемчужины, ряд аватарок «×N» под общим тикетом
+- **Расширенные фильтры в Найти**: drawer «кто был» (avatar-chip multi-select из друзей, поиск при >10), «когда» (date-range + presets «этот год / прошлый год / последние 30 дней»), sort «по оценке друга»
+- **Любимая кухня** в профиле: SQL-агрегат + `composables/useCuisine.js` (cuisineAccusative, razSuffix). Рендер «любит грузинскую — 11 раз» Caveat-шрифтом. Прячется при count<2
+- **`useFeed` event-driven** — параллельная загрузка places/notes/wishlist/users, группировка review-событий, аватарки через userMap
+- **AddArtifactSheet почищен** — убран disabled-пункт «wishlist · скоро». Теперь визит + записка
+- **Анимации MVP**: артефакт fade+slide-up 280мс, разворот недели height+stagger 320мс, gem-stamp при включении
+
+### Изменено
+- **`color-scheme: light`** зафиксирован в `:root` — Safari/Chrome перестали дарк-модить form controls на OS dark mode (подготовка к G2)
+- 30+ литеральных hex-значений в компонентах заменены на CSS-переменные
+
+## [0.20.0] — 2026-05-09 — Раунд 4: бэк-дельта + новые экраны
+
+### Добавлено
+- **Миграция 012** `review_photos` (несколько фото в review): таблица с `position`, FK CASCADE, backfill 9 `image_url` → `position=0`. API: `POST .../photos` (multipart, до 5 за раз), `DELETE .../photos/:pid`. `image_url` сохранён для backwards-compat и cover-fallback
+- **Миграция 013** `notes` + VIEW `feed_events` (review_added + note_added, фундамент для будущих типов). API: `GET/POST/PUT/DELETE /api/notes`, `PUT /api/notes/:id/strike`, `GET /api/feed`, `GET /api/feed/weeks`
+- **Миграция 014** `users.last_seen_feed_at` + `GET /api/feed/unread-count` + `POST /api/feed/seen`. Точка-индикатор «новости» на табе Доска (poll каждые 60s + при focus)
+- **Миграция 015** `wishlists.is_struck` + `struck_at`, триггер при создании review автоматически помечает wishlist как зачёркнутый. API `GET /api/wishlist/all`
+- **Cities API**: `GET /api/cities`, `/cities/:name`, `/cities/:name/places`, `/cities/:name/gems`
+- **Users API**: `GET /api/users`, `/users/:id`, `/users/:id/places`, `/users/:id/gems`, `/users/:id/cities`
+- **Gems Hub API**: `GET /api/gems` (places + by_city + by_user)
+- **`GET /api/random`** с фильтрами `city`, `cuisine_type_id`, `is_gem`, `exclude_visited_by=me|<id>`
+- **`/api/places` расширен**: `attended_by=1,3,7`, `visit_from/to`, `sort=rating_user:<id>` (NULLS LAST)
+- **Новые экраны**: `views/CityPage.vue` (/cities/:name), `views/PersonPage.vue` (/people/:id), `views/GemsHub.vue` (/gems) — серифа-имя, билетик-стата, полки `ResultCard`
+- **PolaroidStack.vue** — 1 фото одиночка, 2 внахлёст −2°/+3°, 3+ стопка из 3-х с каракулевым «+ ещё N»
+- **Onboarding-режим** (C1): юзер с places_count===0 видит read-only ленту + soft-CTA «+ новое место»
+- **Доска: featured-артефакт** (A1) — grid с dense flow, один полароид во всю ширину раз в бакет
+- **Полка «По друзьям»** в Найти — горизонтальная карусель аватарок 60px
+
+### Изменено
+- Доска переведена с flex на `display: grid` + `grid-auto-flow: dense`
+- `repository/aggregate.go` — все SQL-агрегации в одном файле
+
+## [0.19.0] — 2026-05-08 — Phase 7: хендофф дизайнера
+
+### Добавлено
+- **`spec/DESIGN-DECISIONS.md`** — 19 ответов дизайнера verbatim, M1/M2/F1/R2/L4/R3/G1 микро-улучшения реализованы
+- **`spec/NEXT.md`** — продуктовые заметки дизайнера после хендоффа (A1–A3, B1–B5, C1–C6)
+- **M1** маркер карты охрой для wishlist (без рейтинга — терра = «плохо» в светофоре)
+- **M2** стек авторов в balloon
+- **F1** список городов вертикальный
+- **L4** paper-deep фон для развёрнутого архива
+- **R3** stamp-press анимация для gem-toggle
+- **G1** фон вокруг колонки на десктопе
+
+## [0.18.0] — 2026-05-07 — Phase 6: миграция на скрапбук-дизайн
+
+### Добавлено
+- **`scrapbook.scss`** — палитра OKLCH в CSS-переменных, бумажный фон с грэном, sb-* примитивы, Lora + Caveat шрифты
+- **Vue-примитивы**: `Polaroid`, `Tape`, `Stamp`, `Ticket` (food/service/vibe), `Note`, `GemBadge` (анимация блика), `AuthorTag` (4 цвета terra/ochre/moss/plum), `VideoKruzhok`, `PinButton`, `CollapsedStrip`, `AddArtifactSheet`, `ArtifactCard`, `ResultCard`
+- **Доска** (`views/Home.vue`): wordmark, 2-колоночная масонри-сетка, шапка недели + PinButton, «↓ ещё N», свернутые полоски прошлых недель/месяцев
+- **Перевёрстаны на скрапбук**: PlaceDetail, Places (Найти), Profile, PlaceForm, Login, InviteRegister, Invites, MapPage, MapView (маркеры-канцелярки и balloon-плашки), MultiSelect, VideoRecorder, RatingInput, ReviewForm, ReviewCard
+- **`/login`, `/invite/:code`, `/invites`, `/map`** с `meta.scrapbook=true` → навбар Bootstrap скрыт, рендер edge-to-edge
+- **Светофор маркеров карты** — pushpin head меняет цвет по рейтингу (≥8 moss / ≥5 ochre / <5 terra), рейтинг внутри головки
+
+### Удалено
+- `components/PlaceCard.vue` — legacy Bootstrap, заменён ResultCard/ArtifactCard
+
+### Исправлено
+- EXIF orientation — `imaging.Decode(AutoOrientation(true))`, iPhone-фото больше не «лёжа»
+- Cover-fallback на первое review-фото (`COALESCE(p.image_url, review.image_url)`)
+- VideoRecorder на iOS Safari ≤16 — выбор доступного mimeType из кандидатов
+- 401 redirect loop, SW kill-switch, nginx WS upgrade
+
+## [0.17.0] — 2026-05-05 — Phase 5: PWA
+
+### Добавлено
+- **Манифест** `manifest.webmanifest` + иконки 192/512/maskable + apple-touch-icon
+- **Service Worker** `sw.js` с кэшем shell и стратегией network-first для API
+- Регистрация SW в `main.js`
+
+## [0.16.0] — 2026-05-04 — Phases 1-4: мобильная адаптация
+
+### Добавлено
+- **Phase 1**: viewport meta, scss-хелперы для мобильных, safe-area-insets
+- **Phase 2**: `BottomTabBar` (Доска / Найти / Карта / Я / Добавить)
+- **Phase 3**: filter drawer (Bootstrap offcanvas со скрапбук-обёрткой) для Places и MapPage
+- **Phase 4**: touch-friendly inputs, stacked CTAs на мобильных
+- Fix: sort по рейтингу падал с 500 (DISTINCT + ORDER BY конфликт)
+
 ## [0.15.0] — 2026-04-17 — Профиль, пагинация, аватар
 
 ### Добавлено

@@ -206,7 +206,7 @@
 </template>
 
 <script setup>
-import { onMounted, ref, computed } from 'vue'
+import { onMounted, ref, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import { useReviewsStore } from '../stores/reviews'
@@ -410,15 +410,19 @@ function logout() {
   router.push('/login')
 }
 
-onMounted(() => {
-  if (auth.user) {
-    reviewsStore.fetchByUser(auth.user.id)
-    wishlist.fetchPlaces()
-    wishlist.fetchCustom()
-    notesStore.fetchByAuthor(auth.user.id)
-    loadUserProfile()
-  }
-})
+function loadAllForUser() {
+  if (!auth.user?.id) return
+  reviewsStore.fetchByUser(auth.user.id)
+  wishlist.fetchPlaces()
+  wishlist.fetchCustom()
+  notesStore.fetchByAuthor(auth.user.id)
+  loadUserProfile()
+}
+
+onMounted(loadAllForUser)
+// Hard-reloads finish auth/init() async — user becomes available *after* mount.
+// Watch fires once the JWT resolves to /auth/me and we can then hydrate data.
+watch(() => auth.user?.id, (id) => { if (id) loadAllForUser() })
 </script>
 
 <style scoped lang="scss">
@@ -522,10 +526,18 @@ onMounted(() => {
   font-size: 14px;
   color: var(--sb-ink-soft);
   cursor: pointer;
+  white-space: nowrap;
   &.active {
     background: var(--sb-ink);
     color: var(--sb-paper);
     border-color: var(--sb-ink);
+  }
+}
+@media (max-width: 400px) {
+  .me-tabs { gap: 4px; }
+  .me-tab {
+    padding: 5px 10px;
+    font-size: 13px;
   }
 }
 
