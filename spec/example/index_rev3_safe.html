@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8"/>
+  <title>AEVA Eat — концепты v3 (safe mount)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+  <link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,500;0,600;1,400;1,500&family=Caveat:wght@400;500;600&display=swap" rel="stylesheet"/>
+  <link rel="stylesheet" href="scrapbook.css"/>
+  <style>
+    html, body { margin: 0; padding: 0; }
+    body { background: #f0eee9; }
+  </style>
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" crossorigin="anonymous"></script>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel" src="ios-frame.jsx" data-presets="env,react"></script>
+  <script type="text/babel" src="design-canvas.jsx" data-presets="env,react"></script>
+  <script type="text/babel" src="variants.jsx" data-presets="env,react"></script>
+  <script type="text/babel" src="v2.jsx" data-presets="env,react"></script>
+  <script type="text/babel" src="v3.jsx" data-presets="env,react"></script>
+
+  <script type="text/babel" data-presets="env,react">
+    // Wait until v3.jsx finished assigning components to window, then mount.
+    function whenReady(cb) {
+      const need = ['DesignCanvas', 'DCSection', 'DCArtboard', 'DCPostIt', 'IOSDevice', 'V2', 'PhotoFreeCard', 'CityGuide', 'GemsHub', 'PublicShare', 'PlaceHeaderBA'];
+      const ok = need.every(k => typeof window[k] !== 'undefined');
+      if (ok) { cb(); return; }
+      setTimeout(() => whenReady(cb), 60);
+    }
+
+    whenReady(() => {
+      const { DesignCanvas, DCSection, DCArtboard, DCPostIt, IOSDevice,
+              PhotoFreeCard, CityGuide, GemsHub, PublicShare, PlaceHeaderBA, V2 } = window;
+
+      function PhoneFrame({ children }) {
+        return (
+          <IOSDevice width={402} height={874}>
+            <div style={{ height: '100%', position: 'relative', background: 'var(--paper)' }}>
+              {children}
+            </div>
+          </IOSDevice>
+        );
+      }
+
+      function App() {
+        return (
+          <DesignCanvas>
+            <DCSection id="v3" title="v3 · точки боли" subtitle="5 экранов где концепт расходится с реализацией">
+              <DCArtboard id="photofree" label="безфотный артефакт · 3 раскладки" width={402} height={874}>
+                <PhoneFrame><PhotoFreeCard/></PhoneFrame>
+              </DCArtboard>
+              <DCArtboard id="city" label="город как путеводитель" width={402} height={874}>
+                <PhoneFrame><CityGuide/></PhoneFrame>
+              </DCArtboard>
+              <DCArtboard id="gems" label="жемчужины-сокровищница" width={402} height={874}>
+                <PhoneFrame><GemsHub/></PhoneFrame>
+              </DCArtboard>
+              <DCArtboard id="share" label="/p/:id · share — переработанный" width={402} height={874}>
+                <PhoneFrame><PublicShare/></PhoneFrame>
+              </DCArtboard>
+              <DCArtboard id="place-header" label="шапка места · до/после" width={402} height={874}>
+                <PhoneFrame><PlaceHeaderBA/></PhoneFrame>
+              </DCArtboard>
+              <DCPostIt x={2100} y={40} w={280}>
+                v3 — что отрисовано после первого ревью реализации.
+              </DCPostIt>
+            </DCSection>
+
+            <DCSection id="v2" title="v2 · главный экран" subtitle="изначальная отрисовка Доски">
+              <DCArtboard id="v2-board" label="доска (исходный концепт)" width={402} height={874}>
+                <PhoneFrame><V2/></PhoneFrame>
+              </DCArtboard>
+            </DCSection>
+          </DesignCanvas>
+        );
+      }
+
+      ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+      window.__appMounted = true;
+    });
+  </script>
+</body>
+</html>
