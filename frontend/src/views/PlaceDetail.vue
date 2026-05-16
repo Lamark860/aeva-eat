@@ -25,6 +25,14 @@
 
         <h1 class="title">{{ place.name }}</h1>
 
+        <div v-if="place.address" class="hand-meta">{{ place.address }}</div>
+        <div v-if="place.website" class="hand-meta">
+          <a :href="place.website" target="_blank" rel="noopener">{{ websiteHost }}</a>
+        </div>
+
+        <!-- B3 — только два главных штампа: город + кухня. Плюс ромб-жемчужина
+             отдельно (если применимо). Категории ниже мелким caveat'ом —
+             не штампами, чтобы не превращать шапку в свалку. -->
         <div class="stamps">
           <router-link
             v-if="place.city"
@@ -34,32 +42,29 @@
             <Stamp kind="ink">{{ place.city }}</Stamp>
           </router-link>
           <Stamp v-if="place.cuisine_type">{{ place.cuisine_type }}</Stamp>
-          <Stamp
-            v-for="cat in place.categories || []"
-            :key="cat"
-            kind="moss"
-          >
-{{ cat }}
-</Stamp>
-          <router-link v-if="place.is_gem_place" to="/gems" class="stamp-link">
+          <router-link v-if="place.is_gem_place" to="/gems" class="stamp-link gem-stamp">
+            <span class="gem-diamond" aria-hidden="true">◆</span>
             <Stamp kind="gem">жемчужина</Stamp>
           </router-link>
         </div>
 
-        <!-- Q2: рукописная подпись под штампом жемчужины — кто и когда первым отметил. -->
+        <!-- B3 — категории идут под штампами рукописным caveat'ом. -->
+        <div v-if="place.categories?.length" class="categories-caveat">
+          {{ place.categories.join(' · ').toLowerCase() }}
+        </div>
+
+        <!-- B4 (R5-Q1) — подпись без гендерного глагола.
+             Формат: «жемчужина · Аня · 10 мая + Серёжа». -->
         <div v-if="gemSignature" class="gem-signature">
+          <span class="gem-tag">жемчужина</span>
+          <span class="gem-sep"> · </span>
           <router-link
             v-if="gemSignature.firstUser"
             :to="`/people/${gemSignature.firstUser.id}`"
             class="gem-actor"
-          >{{ gemSignature.actor }}</router-link>
-          <span v-if="gemSignature.firstAt"> · {{ gemSignature.firstAt }}</span>
-          <span v-if="gemSignature.others" class="gem-others"> ({{ gemSignature.others }})</span>
-        </div>
-
-        <div v-if="place.address" class="hand-meta">{{ place.address }}</div>
-        <div v-if="place.website" class="hand-meta">
-          <a :href="place.website" target="_blank" rel="noopener">{{ websiteHost }}</a>
+          >{{ gemSignature.firstUser.username }}</router-link>
+          <span v-if="gemSignature.firstAt" class="gem-date"> · {{ gemSignature.firstAt }}</span>
+          <span v-if="gemSignature.others" class="gem-others"> + {{ gemSignature.others }}</span>
         </div>
       </section>
 
@@ -250,9 +255,9 @@ const overallRating = computed(() => {
   return ((Number(p.avg_food) + Number(p.avg_service) + Number(p.avg_vibe)) / 3).toFixed(1)
 })
 
-// Q2 — рукописная подпись под штампом жемчужины. Глагол «отметил/отметила»
-// гендерируется эвристикой по окончанию имени (-а/-я → fem). Несовершенно,
-// но без gender-поля у пользователей — лучшее, что можно сделать без новой схемы.
+// B4 (R5-Q1) — рукописная подпись жемчужины БЕЗ гендерного глагола.
+// Формат: «жемчужина · Аня · 10 мая + Серёжа + Миша». Соавторы через ` + `,
+// без скобок и запятых.
 const monthsRu = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня',
                   'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря']
 function shortDateRu(iso) {
@@ -261,18 +266,14 @@ function shortDateRu(iso) {
   if (Number.isNaN(d.getTime())) return ''
   return `${d.getDate()} ${monthsRu[d.getMonth()]}`
 }
-function gemVerb(username) {
-  return /[ая]$/i.test(username || '') ? 'отметила' : 'отметил'
-}
 const gemSignature = computed(() => {
   const gs = place.value?.gem_status
   if (!gs || !gs.marked_by?.length) return null
   const [first, ...rest] = gs.marked_by
   return {
     firstUser: first,
-    actor: `${gemVerb(first.username)} ${first.username}`,
     firstAt: shortDateRu(gs.first_marked_at),
-    others: rest.length ? `+ ${rest.map(u => u.username).join(', ')}` : '',
+    others: rest.length ? rest.map(u => u.username).join(' + ') : '',
   }
 })
 
@@ -436,15 +437,36 @@ onMounted(async () => {
 .stamps {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 6px 8px;
   justify-content: center;
-  margin: 0 0 8px;
+  align-items: center;
+  margin: 10px 0 4px;
 }
 .stamp-link {
   text-decoration: none;
   color: inherit;
   display: inline-flex;
+  align-items: center;
+  gap: 4px;
   &:hover :deep(.sb-stamp) { transform: rotate(2deg) scale(1.05); }
+}
+.gem-stamp .gem-diamond {
+  font-size: 20px;
+  color: var(--sb-terracotta);
+  line-height: 1;
+  transform: translateY(-1px);
+}
+
+/* B3 — категории под штампами: рукописный caveat, мелко, через `·`.
+   Не плашки, не uppercase — чтобы шапка не была свалкой. */
+.categories-caveat {
+  font-family: var(--sb-hand);
+  font-size: 15px;
+  color: var(--sb-ink-mute);
+  text-align: center;
+  margin: 2px 14px 6px;
+  line-height: 1.3;
+  letter-spacing: 0.02em;
 }
 
 .hand-meta {
@@ -573,13 +595,23 @@ onMounted(async () => {
 
 .ticket-wrap { display: inline-block; }
 
+/* B4 (R5-Q1) — подпись жемчужины: «жемчужина · Аня · 10 мая + Серёжа».
+   Без глагола. Слово «жемчужина» выделено цветом moss, имя в обычном цвете
+   (без падежного склонения), дата каптион-стилем. */
 .gem-signature {
   font-family: var(--sb-hand);
   font-size: 16px;
   color: var(--sb-ink-mute);
   text-align: center;
-  margin: 4px 0 8px;
+  margin: 6px 0 8px;
   line-height: 1.2;
+}
+.gem-tag {
+  color: var(--sb-moss, var(--sb-terracotta));
+  font-style: italic;
+}
+.gem-sep, .gem-date {
+  color: var(--sb-ink-mute);
 }
 .gem-actor {
   color: var(--sb-ink-soft);
@@ -588,7 +620,6 @@ onMounted(async () => {
 }
 .gem-others {
   color: var(--sb-ink-mute);
-  font-size: 14px;
 }
 
 .detail-attendance {
