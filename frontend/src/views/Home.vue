@@ -275,9 +275,16 @@ function isFeatured(item, bucketItems) {
 
 function summaryFor(b) {
   // CollapsedStrip показывает превью только реальных визитов.
-  return b.items.filter(i => i._kind === 'place').slice(0, 3).map((p, i) => ({
+  // Приоритезируем места с фото (cover или review-фото) — иначе полоса
+  // на 8 мест с одним фото выглядит как 3 пустых полароида.
+  const places = b.items.filter(i => i._kind === 'place')
+  const coverOf = (p) => p.image_url || p.feed_photos?.[0]?.url || ''
+  const withPhoto = places.filter(p => coverOf(p))
+  const withoutPhoto = places.filter(p => !coverOf(p))
+  const ordered = [...withPhoto, ...withoutPhoto].slice(0, 3)
+  return ordered.map((p, i) => ({
     id: p.id,
-    src: p.image_url || '',
+    src: coverOf(p),
     cap: p.name,
     gem: !!p.is_gem_place,
     placeholder: ['sb-photo-warm', 'sb-photo-olive', 'sb-photo-dusk', 'sb-photo-sage', 'sb-photo-peach'][i % 5],

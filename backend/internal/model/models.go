@@ -52,6 +52,10 @@ type Place struct {
 	ReviewCount        int           `json:"review_count"`
 	Reviewers          []Reviewer    `json:"reviewers,omitempty"`
 	FeedPhotos         []ReviewPhoto `json:"feed_photos,omitempty"`
+	// TopReviewComment — самая длинная цитата из отзывов места (≥30 симв.).
+	// Используется PhotoFreeCard Q-раскладкой когда фото нет, но есть текст
+	// что вытащить как доминанту. nil/пустой → fallback на T- или G-раскладку.
+	TopReviewComment *string `json:"top_review_comment,omitempty"`
 	// DESIGN-DECISIONS Q2 — populated only on GET /api/places/:id (not on list).
 	GemStatus      *GemStatus       `json:"gem_status,omitempty"`
 	Attendance     []Attendance     `json:"attendance,omitempty"`

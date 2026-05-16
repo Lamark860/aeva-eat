@@ -1,6 +1,6 @@
 # R6 — визуальный аудит дизайнера
 
-Дата: 2026-05-15 → 2026-05-16 (v3 концепты приложены).
+Дата: 2026-05-15 → 2026-05-16 (v3 концепты приложены). 2026-05-16 — R6.1 имплементация P0/A3.
 Источник: дизайнер прошёлся по `spec/screenshots/` (commit `3cf909a`), плюс выборочно по коду (`Home.vue`, `ArtifactCard.vue`, файловое дерево). После этого нарисовал **v3 канвас** — 5 артбордов с эталонными концептами для самых болевых точек.
 
 Это «дрейф концепта от спецификации», а не баг-трекер. Каждый пункт — про то, что сейчас в коде расходится с задуманным скрапбук-дневником.
@@ -65,6 +65,34 @@ python3 -m http.server 8788
 | **R5-Q4** | (a) — лёгкий 1–2° tilt на wishlist-карточках | без изменений (включить `sb-t-l1` / `sb-t-r1` через `cellTilt(item)`) |
 | **R5-Q5** | (b+c) — оставить текущий `currentTime = 0.1` в `forcePoster`. Добавить только текстовый плейсхолдер «тапни, чтобы посмотреть» если кадр не появился за 500мс | мелкий доп. fallback |
 | **R5-Q6** | (a) — разделитель-плашка между блоками: «… а вот эти Аня ещё не пробовала» при `sort=rating_user:<id>` | новый UI-элемент |
+
+---
+
+## R6.1 — имплементация P0 + A3 (2026-05-16)
+
+**Гипотеза P0 опровергнута, фикс смещён.** Дебаг показал, что SQL `COALESCE(p.image_url, review.image_url)` работает корректно. Реальная картина данных: из 185 мест **12 имеют фото** (1 в `places.image_url`, 11 в `reviews.image_url`/`review_photos`). Это не баг — это пустой dataset. Поэтому P0 разбит на две действия:
+
+1. **Frontend — обнимаем `feed_photos` как cover.** В `ArtifactCard.vue` и `ResultCard.vue` появился computed `coverPhoto = image_url || feed_photos[0]?.url`. Места с фото только в отзывах теперь рендерят полароид, не плейсхолдер.
+2. **Frontend — `summaryFor` (Home.vue) приоритезирует места с фото для `CollapsedStrip`.** Раньше брал первые 3 — если все три без фото, полоса показывала 3 пустые клетки. Теперь: сначала места с фото, потом без. Архивная полоса 4-10 мая с 1 фото из 8 мест больше не выглядит пустой.
+
+**A3 — PhotoFreeCard со Q/T/G сделан.** Файл: `frontend/src/components/scrapbook/PhotoFreeCard.vue`. Логика: `is_gem_place → G`, `top_review_comment.length ≥ 30 → Q`, иначе `T`. Подключён в `ArtifactCard` через `<template v-if="isTicketOnly">` (старый блок `art-ticket-card` вырезан, CSS почищен).
+
+**Backend — поле `top_review_comment`.** В `model.Place` добавлено `TopReviewComment *string`. SELECT-блок в обоих запросах `repository/place.go` (List + GetByID):
+```sql
+(SELECT rv.comment FROM reviews rv
+   WHERE rv.place_id = p.id AND rv.comment IS NOT NULL
+   AND LENGTH(rv.comment) >= 30
+   ORDER BY LENGTH(rv.comment) DESC, rv.created_at ASC, rv.id ASC
+   LIMIT 1) AS top_review_comment
+```
+
+**Контроль:**
+- `screenshots/mobile-03-board.png` — CollapsedStrip 4-10 мая теперь показывает реальные фото (3 из 3 с фото вместо 1 из 3).
+- `screenshots/mobile-03b-board-expanded.png` — раскрытая полоса с PhotoFreeCard: цитаты Esmee, Пижоны (Q-layout), штампы жемчужин (G-layout), билетики на остальных (T-layout).
+
+**Что НЕ сделано в этом раунде** (по приоритетам):
+- B3 шапка места, B4 копия без глагола, B5 public share, B6 ромб 3.5, B7 профиль, B8 person — все остаются впереди.
+- Seeding 25-30 мест — пока 185 мест с 12 фото ритма не дают; даже после фикса видно, что плотность визуальной массы — следующая боль.
 
 ---
 

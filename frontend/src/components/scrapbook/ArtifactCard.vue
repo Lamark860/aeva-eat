@@ -5,43 +5,18 @@
     :class="{ featured, 'no-photo': isTicketOnly, 'has-kruzhok': visibleVideos.length > 0 }"
     :aria-label="place.name"
   >
-    <!-- A3 — билетик-only артефакт (NEXT.md §A3). Если у места нет ни cover'а,
-         ни review-фото, но есть рейтинги — рендерим компактный билетик
-         вместо пустого полароида. Ритм ленты оживает чередованием.
-         Кружочки видео тут тоже могут быть — выносим в общий flex-row. -->
+    <!-- A3 — безфотный артефакт. PhotoFreeCard сам выбирает раскладку Q/T/G
+         по данным: жемчужина → штамп-доминанта, длинная цитата → цитата-
+         доминанта, иначе → билетик-доминанта. Эталон v3/01-photofree-card.png.
+         Кружочки видео могут быть сбоку — выносим в общий flex-row. -->
     <template v-if="isTicketOnly">
       <div class="art-photo">
         <div class="art-photo-main">
-          <div class="art-ticket-card">
-            <header class="tc-head">
-              <h3 class="tc-name">{{ place.name }}</h3>
-              <Stamp v-if="place.city" kind="ink" class="tc-stamp">{{ place.city }}</Stamp>
-              <Stamp v-if="place.is_gem_place" kind="gem" class="tc-stamp">жемчужина</Stamp>
-            </header>
-
-            <Ticket
-              :compact="!featured"
-              :food="place.avg_food"
-              :service="place.avg_service"
-              :vibe="place.avg_vibe"
-            />
-
-            <div v-if="caption" class="tc-cap">{{ caption }}</div>
-
-            <div v-if="reviewers.length" class="art-people inline">
-              <span
-                v-for="r in reviewers"
-                :key="r.id"
-                class="r-tag sb-author-tag"
-                :class="[authorColor(r.id), { 'has-photo': !!r.avatar_url }]"
-                :title="r.username"
-              >
-                <img v-if="r.avatar_url" :src="r.avatar_url" alt="" class="r-ph" />
-                <template v-else>{{ (r.username || '?').slice(0, 1).toUpperCase() }}</template>
-              </span>
-              <span v-if="extraReviewers > 0" class="r-extra">+{{ extraReviewers }}</span>
-            </div>
-          </div>
+          <PhotoFreeCard
+            :place="place"
+            :featured="featured"
+            :attendees="attendees"
+          />
         </div>
 
         <div v-if="visibleVideos.length" class="art-kruzhoki">
@@ -68,8 +43,6 @@
           <span v-if="extraVideos > 0" class="art-kruzhok-extra">+{{ extraVideos }}</span>
         </div>
       </div>
-
-      <div v-if="metaLine" class="sb-meta">{{ metaLine }}</div>
     </template>
 
     <!-- Фото-вариант: полароид (одиночный или стопка) + кружочки видео в столбце справа -->
@@ -78,7 +51,7 @@
         <div class="art-photo-main">
           <Polaroid
             v-if="!hasStack"
-            :src="place.image_url || ''"
+            :src="coverPhoto"
             :caption="caption"
             :gem="!!place.is_gem_place"
             :placeholder="placeholderClass"
@@ -167,10 +140,11 @@
 import { computed } from 'vue'
 import Polaroid from './Polaroid.vue'
 import PolaroidStack from './PolaroidStack.vue'
+import PhotoFreeCard from './PhotoFreeCard.vue'
 import Tape from './Tape.vue'
 import Ticket from './Ticket.vue'
-import Stamp from './Stamp.vue'
 import GemBadge from './GemBadge.vue'
+// authorColor сохраняем — нужен для аватарок в фото-варианте (template v-else)
 import { authorColor, formatVisitCaption } from '../../composables/useFeed'
 
 const props = defineProps({
@@ -287,13 +261,18 @@ const hasRatings = computed(() => {
   return [p.avg_food, p.avg_service, p.avg_vibe].some((v) => v !== null && v !== undefined)
 })
 
+// Унифицированный cover: либо место имеет своё фото, либо первое из стопки
+// review-фото. Если ни того ни другого — это «безфотный» артефакт.
+const coverPhoto = computed(() => {
+  const p = props.place
+  return p.image_url || stackPhotos.value[0]?.url || ''
+})
+
 // A3: ни cover'а, ни review-photos, но место «настоящее» (есть рейтинги или
 // хотя бы reviewers). Делаем билетик-only, чтобы не было пустых полароидов.
 const isTicketOnly = computed(() => {
-  const p = props.place
-  const hasAnyPhoto = !!p.image_url || stackPhotos.value.length > 0
-  if (hasAnyPhoto) return false
-  return hasRatings.value || (p.reviewers || []).length > 0
+  if (coverPhoto.value) return false
+  return hasRatings.value || (props.place.reviewers || []).length > 0
 })
 
 const metaLine = computed(() => {
@@ -421,52 +400,6 @@ const metaLine = computed(() => {
     font-size: 16px;
     margin-left: 8px;
   }
-}
-
-/* A3 — билетик-only артефакт. Маленькая бумажная карточка с серифа-именем,
-   штампиком, билетиком-рейтингом и стеком авторов. Без полароида. */
-.art-ticket-card {
-  position: relative;
-  background: var(--sb-paper-card);
-  padding: 14px 14px 24px;
-  box-shadow:
-    0 1px 1px rgba(40, 30, 20, 0.06),
-    0 4px 12px rgba(40, 30, 20, 0.08);
-  border-radius: 1px;
-}
-.tc-head {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px 8px;
-  margin-bottom: 10px;
-}
-.tc-name {
-  flex: 1 1 100%;
-  font-family: var(--sb-serif);
-  font-style: italic;
-  font-weight: 500;
-  font-size: 18px;
-  color: var(--sb-ink);
-  line-height: 1.15;
-  margin: 0;
-  word-break: break-word;
-}
-.tc-stamp {
-  flex: 0 0 auto;
-  transform: rotate(-2deg);
-}
-.tc-cap {
-  font-family: var(--sb-hand);
-  font-size: 15px;
-  color: var(--sb-ink-soft);
-  margin-top: 8px;
-}
-
-/* Inline-вариант стека авторов внутри билетик-карточки — без абсолюта. */
-.art-people.inline {
-  position: static;
-  margin-top: 10px;
 }
 
 /* В stack-режиме caption-полоса полароида не рендерится верхним слоем —

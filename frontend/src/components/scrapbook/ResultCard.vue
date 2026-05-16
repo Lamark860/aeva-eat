@@ -2,7 +2,7 @@
   <router-link :to="`/places/${place.id}`" class="sb-result">
     <div class="thumb">
       <Polaroid
-        :src="place.image_url || ''"
+        :src="coverPhoto"
         :width="76"
         :height="76"
         :tilt="tilt"
@@ -78,6 +78,13 @@ const tapeStyle = computed(() => ({
 
 const placeholderPalette = ['sb-photo-warm', 'sb-photo-olive', 'sb-photo-dusk', 'sb-photo-sage', 'sb-photo-peach', 'sb-photo-brick', 'sb-photo-cream', 'sb-photo-slate', 'sb-photo-indigo']
 const placeholderClass = computed(() => placeholderPalette[(props.place.id ?? 0) % placeholderPalette.length])
+
+// Унифицированный cover: image_url или первое из feed_photos. Без этого
+// места с фото только в отзывах рендерятся как пустые плейсхолдеры в списках.
+const coverPhoto = computed(() => {
+  const p = props.place
+  return p.image_url || p.feed_photos?.[0]?.url || ''
+})
 
 const hasRatings = computed(() => {
   const p = props.place

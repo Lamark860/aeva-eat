@@ -67,15 +67,25 @@ node shot-v3-boards.mjs                          # 6 артбордов v3
 
 После — копируем в `spec/screenshots/` и коммитим.
 
-## Что делать в первую очередь
+## Что сделано в R6.1 (2026-05-16)
+
+- ✅ **A1/A2 — cover-fallback (data-issue, не SQL).** SQL `COALESCE(p.image_url, review.image_url)` отрабатывает корректно. Дебаг показал: из 185 мест **12 имеют фото** (1 в places, 11 в review/review_photos). Это не SQL-баг — это пустой dataset. **Реальный фикс:** в `ArtifactCard.vue` и `ResultCard.vue` добавлен `coverPhoto = image_url || feed_photos[0]?.url`. Места с фото только в отзывах теперь рендерят полароид. `summaryFor` в `Home.vue` приоритезирует места с фото для CollapsedStrip — архивная полоса больше не показывает 3 пустых клетки если в неделе есть хотя бы 1 фото.
+- ✅ **A3 — PhotoFreeCard со Q/T/G.** Новый компонент `components/scrapbook/PhotoFreeCard.vue`. Логика: gem → G, comment≥30 → Q, иначе → T. Подключён в `ArtifactCard` через `<template v-if="isTicketOnly">`. Backend: добавлено поле `top_review_comment` в `model.Place` + SELECT в `repository/place.go` (List + GetByID).
+- 📸 Контроль: `screenshots/mobile-03b-board-expanded.png` — раскрытая полоса архива с PhotoFreeCard в деле (цитаты Esmee/Пижоны, билетики на остальных).
+
+## Что делать в первую очередь (следующий раунд)
 
 В приоритетном порядке (полный список — `R6_DESIGNER_REVIEW.md` → Приоритеты):
 
-1. **Cover-fallback fix (A1/A2).** SQL `COALESCE(p.image_url, review.image_url)` в `/api/places` и `/api/places/:id` — проверить что отрабатывает на List, не только GetByID. Может быть проблема в WHERE / GROUP BY клаузе.
-2. **`isTicketOnly` шаг 1 (A3).** Условие `!!place.image_url` → `!!(place.image_url || '').trim()` в `ArtifactCard.vue` и `ResultCard.vue`.
-3. **`PhotoFreeCard` со switch Q/T/G (A3 шаг 2).** Новый компонент. Эталон [`v3/01-photofree-card.png`](./screenshots/v3/01-photofree-card.png).
-4. **Штамп-помойка в шапке места (B3).** Эталон [`v3/05-place-header-ba.png`](./screenshots/v3/05-place-header-ba.png).
-5. **R5-Q1: без гендер-глагола (B4).** Там же — эталон под штампом ЖЕМЧУЖИНА в нижней части артборда.
+1. **Штамп-помойка в шапке места (B3).** Эталон [`v3/05-place-header-ba.png`](./screenshots/v3/05-place-header-ba.png). 2 главных штампа (город + кухня) + ромб-жемчужина, категории — caveat'ом под адресом.
+2. **R5-Q1: без гендер-глагола (B4).** Там же — формат `«жемчужина · Аня · 10 мая + Серёжа»`.
+3. **«Любит X» logic-fix (B7).** ≥5 визитов И ≥15%.
+4. **Билетик в профиле — ячейка «городов» (B7).**
+5. **Маркер карты с рейтингом — откуда 3.5 (B6).**
+6. **Public share (B5 + R5-Q3).** Эталон [`v3/04-public-share.png`](./screenshots/v3/04-public-share.png).
+7. **Сидинг 25–30 fake мест с разнообразием** — без этого PhotoFreeCard и cover-fallback не получится показать масштабнее на скринах.
+
+> ⚠️ Заметка о P0: оригинальный план «SQL COALESCE не работает» оказался неверным. SQL работает; проблема была в данных. Если у будущей сессии возникнет такая же гипотеза — проверять данные SQL'ом до правки кода. См. `R6_DESIGNER_REVIEW.md` секция R6.1.
 
 ## После каждой правки
 

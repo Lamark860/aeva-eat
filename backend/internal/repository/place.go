@@ -179,7 +179,12 @@ func (r *PlaceRepo) List(f PlaceFilter) (*PlaceListResult, error) {
 				   FROM reviews rv WHERE rv.place_id = p.id
 				   AND rv.video_url IS NOT NULL AND rv.video_url <> ''),
 				ARRAY[]::TEXT[]
-			) AS videos
+			) AS videos,
+			(SELECT rv.comment FROM reviews rv
+			   WHERE rv.place_id = p.id AND rv.comment IS NOT NULL
+			   AND LENGTH(rv.comment) >= 30
+			   ORDER BY LENGTH(rv.comment) DESC, rv.created_at ASC, rv.id ASC
+			   LIMIT 1) AS top_review_comment
 	` + baseFrom + whereClause
 
 	// All ORDER BY clauses end with `p.id DESC` as a stable tiebreaker — without it,
@@ -233,6 +238,7 @@ func (r *PlaceRepo) List(f PlaceFilter) (*PlaceListResult, error) {
 			&p.CreatedBy, &p.ImageURL, &p.CreatedAt, &p.UpdatedAt,
 			&avgFood, &avgService, &avgVibe, &p.ReviewCount,
 			&p.IsGemPlace, &p.HasVideo, &p.VideoURL, &videos,
+			&p.TopReviewComment,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("scan place: %w", err)
@@ -295,7 +301,12 @@ func (r *PlaceRepo) GetByID(id int) (*model.Place, error) {
 				   FROM reviews rv WHERE rv.place_id = p.id
 				   AND rv.video_url IS NOT NULL AND rv.video_url <> ''),
 				ARRAY[]::TEXT[]
-			) AS videos
+			) AS videos,
+			(SELECT rv.comment FROM reviews rv
+			   WHERE rv.place_id = p.id AND rv.comment IS NOT NULL
+			   AND LENGTH(rv.comment) >= 30
+			   ORDER BY LENGTH(rv.comment) DESC, rv.created_at ASC, rv.id ASC
+			   LIMIT 1) AS top_review_comment
 		FROM places p
 		LEFT JOIN cuisine_types ct ON ct.id = p.cuisine_type_id
 		LEFT JOIN (
@@ -313,6 +324,7 @@ func (r *PlaceRepo) GetByID(id int) (*model.Place, error) {
 		&p.CreatedBy, &p.ImageURL, &p.CreatedAt, &p.UpdatedAt,
 		&avgFood, &avgService, &avgVibe, &p.ReviewCount,
 		&p.IsGemPlace, &p.HasVideo, &p.VideoURL, (*pq.StringArray)(&p.Videos),
+		&p.TopReviewComment,
 	)
 	if err != nil {
 		return nil, err
