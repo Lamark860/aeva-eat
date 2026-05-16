@@ -280,6 +280,10 @@ async function loadUserProfile() {
   } catch { /* профиль необязателен — фразу просто не рендерим */ }
 }
 
+// B7 — ячейка «городов» в билетике должна быть числом, а не прочерком.
+// Бэкенд считает city_count точно (через визиты), фронт берёт его если
+// профиль успел подгрузиться. Fallback на локальный расчёт через
+// wishlistPlaces оставлен на случай провала загрузки /users/:id.
 const stats = computed(() => {
   const placeIds = new Set()
   let gems = 0
@@ -287,12 +291,15 @@ const stats = computed(() => {
     placeIds.add(rv.place_id)
     if (rv.is_gem) gems++
   }
-  // cities: try to look up from wishlistPlaces (which has city field)
-  const cities = new Set()
-  for (const p of wishlist.wishlistPlaces) {
-    if (placeIds.has(p.id) && p.city) cities.add(p.city)
+  let cities = userProfile.value?.city_count
+  if (cities == null) {
+    const localCities = new Set()
+    for (const p of wishlist.wishlistPlaces) {
+      if (placeIds.has(p.id) && p.city) localCities.add(p.city)
+    }
+    cities = localCities.size
   }
-  return { places: placeIds.size, gems, cities: cities.size || '–' }
+  return { places: placeIds.size, gems, cities: cities > 0 ? cities : '–' }
 })
 
 // Password change

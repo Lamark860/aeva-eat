@@ -73,19 +73,22 @@ node shot-v3-boards.mjs                          # 6 артбордов v3
 - ✅ **A3 — PhotoFreeCard со Q/T/G.** Новый компонент `components/scrapbook/PhotoFreeCard.vue`. Логика: gem → G, comment≥30 → Q, иначе → T. Подключён в `ArtifactCard` через `<template v-if="isTicketOnly">`. Backend: добавлено поле `top_review_comment` в `model.Place` + SELECT в `repository/place.go` (List + GetByID).
 - ✅ **B3 — штамп-помойка в шапке места.** В `PlaceDetail.vue` шапка: title → адрес → 2 главных штампа (Город + Кухня) + ромб ◆ ЖЕМЧУЖИНА → категории мелким caveat'ом через `·` → подпись жемчужины. Было 7 штампов, стало 3.
 - ✅ **B4 (R5-Q1) — подпись без гендер-глагола.** Удалён `gemVerb` (эвристика по `-а/-я` → отметила/отметил). Новый формат: `«жемчужина · Аня · 10 мая + Серёжа + Миша»`. Слово «жемчужина» в moss-цвете, имя без падежного склонения, соавторы через ` + `.
-- 📸 Контроль: `screenshots/mobile-03b-board-expanded.png` (доска), `screenshots/mobile-10b-place-header.png` (шапка места — viewport-only).
+- ✅ **B7 — «любит X» logic-fix.** В `useCuisine.js`: порог ≥5 визитов И ≥15% от `place_count`. У lamark (144 места, любимая кухня 2 раза) фраза скрыта — было «любит европейскую — 2 раза», стало пусто.
+- ✅ **B7 — ячейка «городов» в билетике профиля.** `stats.cities` использует `userProfile.city_count` из `/users/:id`, fallback на локальный расчёт. У lamark: «3 ГОРОДОВ» вместо прочерка.
+- ✅ **B6 — число на ромбе жемчужины убрано.** `gemSVG` в `MapView.vue` больше не рисует `<text>` рейтинга. Ромб = вердикт «топ», число (особенно 3.5 у Ронни) с ним конфликтует. Рейтинг видно в балуне. Pushpin'ы (134 не-жемчужины) сохранили числа.
+- 📸 Контроль: `screenshots/mobile-03b-board-expanded.png` (доска), `screenshots/mobile-10b-place-header.png` (шапка), `screenshots/mobile-06b-profile-header.png` (профиль).
 
 ## Что делать в первую очередь (следующий раунд)
 
 В приоритетном порядке (полный список — `R6_DESIGNER_REVIEW.md` → Приоритеты):
 
-1. **«Любит X» logic-fix (B7).** ≥5 визитов И ≥15% от общего числа.
-2. **Билетик в профиле — ячейка «городов» (B7).** Прочерк = сломалось.
-3. **Маркер карты с рейтингом — откуда 3.5 (B6).** Жемчужина с low-rating читается криво.
-4. **Public share (B5 + R5-Q3).** Эталон [`v3/04-public-share.png`](./screenshots/v3/04-public-share.png).
-5. **Сидинг 25–30 fake мест с разнообразием** — без этого PhotoFreeCard и cover-fallback не получится показать масштабнее на скринах.
-6. **Город как путеводитель (B1).** [`v3/02-city-guide.png`](./screenshots/v3/02-city-guide.png).
-7. **Жемчужины-сокровищница (B2).** [`v3/03-gems-hub.png`](./screenshots/v3/03-gems-hub.png).
+1. **Public share (B5 + R5-Q3).** Эталон [`v3/04-public-share.png`](./screenshots/v3/04-public-share.png). Cover ~45%, бумажная плашка с CTA-prompt'ом, `?next=/places/:id`.
+2. **Сидинг 25–30 fake мест с разнообразием** — без этого PhotoFreeCard и cover-fallback не получится показать масштабнее на скринах. Дамп с фото / без / с видео / gem / wishlist / записки.
+3. **Город как путеводитель (B1).** [`v3/02-city-guide.png`](./screenshots/v3/02-city-guide.png).
+4. **Жемчужины-сокровищница (B2).** [`v3/03-gems-hub.png`](./screenshots/v3/03-gems-hub.png).
+5. **Person page reduction-strategy (B8).**
+6. **R5-Q4/Q5/Q6** — мелочи.
+7. **Рефактор `ArtifactCard.vue` (D1).**
 
 > ⚠️ Заметка о P0: оригинальный план «SQL COALESCE не работает» оказался неверным. SQL работает; проблема была в данных. Если у будущей сессии возникнет такая же гипотеза — проверять данные SQL'ом до правки кода. См. `R6_DESIGNER_REVIEW.md` секция R6.1.
 

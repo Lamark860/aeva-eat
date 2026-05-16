@@ -85,9 +85,11 @@ function pushpinSVG(id, rating) {
 }
 
 function gemSVG(id, rating) {
-  // 44x54: gem diamond on top with subtle glow + needle line below
-  const label = ratingLabel(rating)
-  const fontSize = label.length > 2 ? 8.5 : 10
+  // B6 — на ромбе жемчужины НЕ показываем рейтинг. Ромб сам по себе вердикт
+  // «топ» — число (особенно низкое, типа 3.5) вступает с ним в конфликт.
+  // Рейтинг видно в балуне при тапе; на маркере — только сияние ромба.
+  // 44x54: gem diamond on top with subtle glow + needle line below.
+  void rating
 
   return `<svg width="44" height="54" viewBox="0 0 44 54" xmlns="http://www.w3.org/2000/svg">
     <defs>
@@ -120,7 +122,6 @@ function gemSVG(id, rating) {
           stroke="${C.terraDark}" stroke-width="0.9" fill="none" opacity="0.55"/>
     <!-- highlight -->
     <path d="M14 9 L17 9 L11 19 L8 19 Z" fill="#fff" opacity="0.6"/>
-    ${label ? `<text x="22" y="22" text-anchor="middle" fill="${C.terraDark}" font-family="Lora, Georgia, serif" font-weight="600" font-size="${fontSize}" paint-order="stroke" stroke="#fff" stroke-width="0.7" stroke-linejoin="round">${label}</text>` : ''}
   </svg>`
 }
 
