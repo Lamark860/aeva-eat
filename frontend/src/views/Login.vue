@@ -50,23 +50,35 @@
 
 <script setup>
 import { ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 
 const auth = useAuthStore()
 const router = useRouter()
+const route = useRoute()
 
 const username = ref('')
 const password = ref('')
 const error = ref('')
 const loading = ref(false)
 
+// R5-Q3 (B5) — после login редиректим на ?next=/places/:id если он указан.
+// Используется на public share странице /p/:id чтобы вернуть юзера к месту,
+// которое его сюда привело. Принимаем только internal-paths (начинаются с /
+// и не выглядят как протокол), чтобы избежать open-redirect.
+function safeNext(raw) {
+  if (typeof raw !== 'string') return null
+  if (!raw.startsWith('/') || raw.startsWith('//')) return null
+  return raw
+}
+
 async function handleLogin() {
   error.value = ''
   loading.value = true
   try {
     await auth.login(username.value, password.value)
-    router.push('/')
+    const next = safeNext(route.query.next) || '/'
+    router.push(next)
   } catch (e) {
     error.value = e.response?.data?.error || 'Ошибка входа'
   } finally {

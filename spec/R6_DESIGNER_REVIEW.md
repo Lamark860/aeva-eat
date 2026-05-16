@@ -146,6 +146,31 @@ if (total > 0 && n / total < LOVE_MIN_SHARE) return ''
 
 ---
 
+## R6.4 — B5 public share (2026-05-16)
+
+**`/p/<id>` переработан по эталону `v3/04-public-share.png`.** Backend handler `share.go` отдаёт новый `shareTemplate` целиком переписанный:
+
+- Cover ~42vh (raньше 64vh) — теперь под фотом видна бумажная плашка целиком на первом экране
+- AEVA·EAT wordmark сверху-справа (рукописно, terracotta)
+- Бумажная плашка с двумя tape (rose+blue) под cover
+- Caveat-caption «ИЗ ДНЕВНИКА КРУГА» сверху плашки
+- Серифа-имя крупно + meta «Город · Кухня» рукописно
+- Если is_gem — `<span class="diamond">◆</span> ЖЕМЧУЖИНА` (плашка с border + ромб)
+- CTA — **бумажная** prompt-кнопка: dashed border var(--terra-dark), tilt -1°, стрелка `→` terracotta, без backdrop-pill
+- Tagline «камерный дневник еды» caveat'ом под CTA
+
+**R5-Q3 (`?next=/places/:id`):** CTA-href теперь `/login?next=/places/{ID}`. Frontend `Login.vue` после успешного `auth.login(...)` делает `router.push(safeNext(route.query.next) || '/')`. `safeNext` фильтрует чтобы принимать только internal paths (`/foo`), не `//evil.com` или `http://...` — защита от open-redirect.
+
+**Backend изменение:** `shareData` теперь несёт `ID` и `Cuisine` (раньше передавалась только `City`). Используются в template и в meta-строке.
+
+**Контроль:** `screenshots/mobile-14b-share.png` — share-страница Мясного гуру.
+
+**Что осталось от R6 на следующий раунд:**
+- B1 city, B2 gems hub, B8 person, D-структурные, R5-Q4/Q5/Q6 мелочи.
+- Сидинг разнообразных fake-данных — приоритет на показ кругу.
+
+---
+
 ## A. Критическое — скрапбук без фото перестаёт быть скрапбуком
 
 **Это приоритет 0. Пока не починим — на доске пустые клетки, и приложение читается как сырое. Можно сделать всё остальное идеально, но если 90% полароидов остаются пустыми — скрапбук-метафора не работает, и весь концепт-арт зря.**

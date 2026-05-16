@@ -76,19 +76,19 @@ node shot-v3-boards.mjs                          # 6 артбордов v3
 - ✅ **B7 — «любит X» logic-fix.** В `useCuisine.js`: порог ≥5 визитов И ≥15% от `place_count`. У lamark (144 места, любимая кухня 2 раза) фраза скрыта — было «любит европейскую — 2 раза», стало пусто.
 - ✅ **B7 — ячейка «городов» в билетике профиля.** `stats.cities` использует `userProfile.city_count` из `/users/:id`, fallback на локальный расчёт. У lamark: «3 ГОРОДОВ» вместо прочерка.
 - ✅ **B6 — число на ромбе жемчужины убрано.** `gemSVG` в `MapView.vue` больше не рисует `<text>` рейтинга. Ромб = вердикт «топ», число (особенно 3.5 у Ронни) с ним конфликтует. Рейтинг видно в балуне. Pushpin'ы (134 не-жемчужины) сохранили числа.
-- 📸 Контроль: `screenshots/mobile-03b-board-expanded.png` (доска), `screenshots/mobile-10b-place-header.png` (шапка), `screenshots/mobile-06b-profile-header.png` (профиль).
+- ✅ **B5 + R5-Q3 — public share переработан.** `/p/<id>` теперь: cover ~42vh, paper-плашка с двумя tape, caption «ИЗ ДНЕВНИКА КРУГА», серифа-имя + «город · кухня», ◆ЖЕМЧУЖИНА с ромбом и плашкой, бумажная dashed-CTA с 1° tilt и стрелкой → «войти, чтобы увидеть впечатления» (НЕ терракотовый pill), caveat «камерный дневник еды». Wordmark «AEVA·EAT» сверху-справа. CTA href = `/login?next=/places/{ID}` — `Login.vue` после успешного login делает `router.push(next)` если параметр безопасен (internal path).
+- 📸 Контроль: `screenshots/mobile-03b-board-expanded.png` (доска), `screenshots/mobile-10b-place-header.png` (шапка), `screenshots/mobile-06b-profile-header.png` (профиль), `screenshots/mobile-14b-share.png` (share).
 
 ## Что делать в первую очередь (следующий раунд)
 
 В приоритетном порядке (полный список — `R6_DESIGNER_REVIEW.md` → Приоритеты):
 
-1. **Public share (B5 + R5-Q3).** Эталон [`v3/04-public-share.png`](./screenshots/v3/04-public-share.png). Cover ~45%, бумажная плашка с CTA-prompt'ом, `?next=/places/:id`.
-2. **Сидинг 25–30 fake мест с разнообразием** — без этого PhotoFreeCard и cover-fallback не получится показать масштабнее на скринах. Дамп с фото / без / с видео / gem / wishlist / записки.
-3. **Город как путеводитель (B1).** [`v3/02-city-guide.png`](./screenshots/v3/02-city-guide.png).
-4. **Жемчужины-сокровищница (B2).** [`v3/03-gems-hub.png`](./screenshots/v3/03-gems-hub.png).
-5. **Person page reduction-strategy (B8).**
-6. **R5-Q4/Q5/Q6** — мелочи.
-7. **Рефактор `ArtifactCard.vue` (D1).**
+1. **Сидинг 25–30 fake мест с разнообразием** — без этого PhotoFreeCard и cover-fallback не получится показать масштабнее на скринах. Дамп с фото / без / с видео / gem / wishlist / записки.
+2. **Город как путеводитель (B1).** [`v3/02-city-guide.png`](./screenshots/v3/02-city-guide.png).
+3. **Жемчужины-сокровищница (B2).** [`v3/03-gems-hub.png`](./screenshots/v3/03-gems-hub.png).
+4. **Person page reduction-strategy (B8).**
+5. **R5-Q4/Q5/Q6** — мелочи.
+6. **Рефактор `ArtifactCard.vue` (D1).**
 
 > ⚠️ Заметка о P0: оригинальный план «SQL COALESCE не работает» оказался неверным. SQL работает; проблема была в данных. Если у будущей сессии возникнет такая же гипотеза — проверять данные SQL'ом до правки кода. См. `R6_DESIGNER_REVIEW.md` секция R6.1.
 

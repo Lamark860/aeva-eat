@@ -24,8 +24,10 @@ func NewShareHandler(placeRepo *repository.PlaceRepo) *ShareHandler {
 }
 
 type shareData struct {
+	ID       int
 	Name     string
 	City     string
+	Cuisine  string
 	ImageURL string
 	IsGem    bool
 	OGTitle  string
@@ -46,6 +48,7 @@ func (h *ShareHandler) Render(w http.ResponseWriter, r *http.Request) {
 	}
 
 	d := shareData{
+		ID:      p.ID,
 		Name:    p.Name,
 		IsGem:   p.IsGemPlace,
 		OGTitle: p.Name,
@@ -55,6 +58,9 @@ func (h *ShareHandler) Render(w http.ResponseWriter, r *http.Request) {
 		if d.City != "" {
 			d.OGTitle = p.Name + " · " + d.City
 		}
+	}
+	if p.CuisineType != nil {
+		d.Cuisine = *p.CuisineType
 	}
 	if p.ImageURL != nil {
 		d.ImageURL = *p.ImageURL
@@ -112,7 +118,10 @@ const shareTemplate = `<!doctype html>
   --paper-card:   #fdfcf7;
   --ink:          oklch(0.22 0.02 60);
   --ink-mute:     oklch(0.6 0.015 60);
+  --ink-soft:     oklch(0.45 0.018 60);
   --terracotta:   oklch(0.58 0.14 30);
+  --terra-dark:   oklch(0.45 0.14 30);
+  --tape:         oklch(0.92 0.08 70 / 0.7);
   --serif:        'Lora', Georgia, serif;
   --hand:         'Caveat', 'Marker Felt', cursive;
 }
@@ -123,79 +132,160 @@ body {
   color: var(--ink);
   font-family: var(--serif);
   min-height: 100vh;
+  position: relative;
 }
+
+/* AEVA EAT wordmark — рукописно, верхний правый, кивок к app-каркасу */
+.wordmark {
+  position: absolute;
+  top: 12px;
+  right: 16px;
+  font-family: var(--hand);
+  font-size: 18px;
+  letter-spacing: 0.08em;
+  color: var(--terracotta);
+  z-index: 3;
+  user-select: none;
+}
+
+/* B5 — cover ~42% высоты (раньше 64vh — слишком много).
+   Под плашкой бумаги виден ещё ~58% — там CTA и подпись «камерный дневник еды». */
 .cover {
   width: 100%;
-  height: 64vh;
-  max-height: 480px;
+  height: 42vh;
+  max-height: 320px;
   background: oklch(0.55 0.06 30);
   background-size: cover;
   background-position: center;
 }
+
+/* Бумажная плашка — заходит на cover и продолжается под ним. Tape сверху. */
+.card-wrap {
+  position: relative;
+  margin: -48px 18px 18px;
+  z-index: 2;
+}
+.tape {
+  position: absolute;
+  top: -10px;
+  width: 90px;
+  height: 22px;
+  background: var(--tape);
+  box-shadow: 0 1px 2px rgba(40, 30, 20, 0.08);
+}
+.tape.l { left: 24px; transform: rotate(-9deg); }
+.tape.r { right: 24px; transform: rotate(8deg); background: oklch(0.88 0.06 200 / 0.7); }
+
 .card {
   background: var(--paper-card);
-  margin: -32px 16px 0;
-  padding: 22px 22px 28px;
+  padding: 24px 24px 28px;
   border-radius: 1px;
+  text-align: center;
   box-shadow:
     0 1px 1px rgba(40, 30, 20, 0.08),
     0 6px 18px rgba(40, 30, 20, 0.10);
-  text-align: center;
-  position: relative;
-  z-index: 2;
 }
+
+.cap-top {
+  font-family: var(--hand);
+  font-size: 14px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+  margin-bottom: 12px;
+}
+
 .name {
   font-family: var(--serif);
   font-style: italic;
   font-weight: 500;
-  font-size: 28px;
-  line-height: 1.15;
+  font-size: 30px;
+  line-height: 1.1;
   margin: 0 0 6px;
 }
-.city {
+.meta {
   font-family: var(--hand);
-  font-size: 20px;
+  font-size: 18px;
   color: var(--ink-mute);
-  margin-bottom: 10px;
+  margin-bottom: 12px;
 }
-.gem {
-  display: inline-block;
+
+.gem-stamp {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin: 4px 0 14px;
+}
+.gem-stamp .diamond {
+  font-size: 18px;
+  color: var(--terracotta);
+  line-height: 1;
+}
+.gem-stamp .label {
   font-family: var(--serif);
   font-weight: 600;
-  font-size: 10px;
+  font-size: 11px;
   letter-spacing: 0.18em;
   text-transform: uppercase;
   color: var(--terracotta);
   border: 1.4px solid var(--terracotta);
-  padding: 3px 8px 2px;
+  padding: 3px 9px 2px;
   border-radius: 2px;
   background: oklch(0.94 0.05 85 / 0.5);
-  margin-bottom: 14px;
 }
+
+/* B5 — CTA как бумажная prompt-кнопка с 1° наклоном, НЕ терракотовый pill.
+   Бумажная плашка с пунктирной рамкой, arrow-prefix → */
 .cta {
-  display: inline-block;
-  margin-top: 8px;
+  display: block;
+  margin: 14px auto 10px;
   padding: 12px 22px;
-  background: var(--terracotta);
-  color: #fff;
+  background: var(--paper-card);
+  color: var(--ink);
   font-family: var(--serif);
   font-style: italic;
   font-size: 16px;
   text-decoration: none;
-  border-radius: 999px;
+  border: 1px dashed var(--terra-dark);
+  border-radius: 2px;
   box-shadow:
-    0 1px 1px rgba(40, 30, 20, 0.1),
-    0 4px 10px rgba(40, 30, 20, 0.15);
+    0 1px 1px rgba(40, 30, 20, 0.06),
+    0 3px 8px rgba(40, 30, 20, 0.08);
+  transform: rotate(-1deg);
+  max-width: 320px;
+}
+.cta:hover { background: oklch(0.96 0.03 85); }
+.cta .arrow { color: var(--terracotta); margin-right: 4px; }
+
+.tagline {
+  font-family: var(--hand);
+  font-size: 15px;
+  color: var(--ink-mute);
+  text-align: center;
+  margin-top: 12px;
 }
 </style>
 </head>
 <body>
+<div class="wordmark">AEVA·EAT</div>
 <div class="cover" {{if .ImageURL}}style="background-image: url('{{.ImageURL}}')"{{end}}></div>
-<div class="card">
-  <h1 class="name">{{.Name}}</h1>
-  {{if .City}}<div class="city">{{.City}}</div>{{end}}
-  {{if .IsGem}}<div class="gem">жемчужина</div>{{end}}
-  <a class="cta" href="/login">войти, чтобы увидеть наши впечатления</a>
+<div class="card-wrap">
+  <span class="tape l"></span>
+  <span class="tape r"></span>
+  <div class="card">
+    <div class="cap-top">из дневника круга</div>
+    <h1 class="name">{{.Name}}</h1>
+    {{if or .City .Cuisine}}<div class="meta">
+      {{if .City}}{{.City}}{{end}}{{if and .City .Cuisine}} · {{end}}{{if .Cuisine}}{{.Cuisine}}{{end}}
+    </div>{{end}}
+    {{if .IsGem}}<div class="gem-stamp">
+      <span class="diamond">◆</span><span class="label">жемчужина</span>
+    </div>{{end}}
+    <a class="cta" href="/login?next=/places/{{.ID}}">
+      <span class="arrow">→</span> войти, чтобы увидеть впечатления
+    </a>
+    <div class="tagline">камерный дневник еды</div>
+  </div>
 </div>
 </body>
 </html>
