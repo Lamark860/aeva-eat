@@ -354,7 +354,7 @@
           />
           <label class="form-check-label" for="gemFilterMobile">только&nbsp;жемчужины&nbsp;♦</label>
         </div>
-        <div class="d-grid gap-2 mt-4">
+        <div class="d-grid gap-2 mt-4 mb-3">
           <button class="btn btn-apply" data-bs-dismiss="offcanvas" @click="fetchFiltered">применить</button>
           <button class="btn btn-link reset-btn" @click="resetFilters">сбросить</button>
         </div>
@@ -365,7 +365,6 @@
 
 <script setup>
 import { onMounted, ref, computed, watch } from 'vue'
-import { Offcanvas } from 'bootstrap'
 import { useRoute, useRouter } from 'vue-router'
 import { usePlacesStore } from '../stores/places'
 import { useCatalogsStore } from '../stores/catalogs'
@@ -413,29 +412,21 @@ const sortBase = computed(() => {
   return s.startsWith('rating_user:') ? 'rating_user' : s
 })
 const ratingUserId = ref('')
-// Sort — quick action: apply + close drawer.
-// Исключение — выбор «по оценке друга» без id: ждём вторую селекцию
-// (по конкретному другу), чтобы не дёргать запрос с неполным sort'ом.
+// Все фильтры внутри дровера ждут «применить» — consistent UX.
+// Раньше chip «Кто был» применялся сразу, а select sort — нет — пользователь
+// жаловался на несогласованность («только по людям так работает»).
 function onSortChange(e) {
   const v = e.target.value
   if (v === 'rating_user') {
-    if (!ratingUserId.value) {
-      placesStore.filters.sort = 'rating_user'
-      return  // ждём выбора друга
-    }
-    placesStore.filters.sort = `rating_user:${ratingUserId.value}`
+    placesStore.filters.sort = ratingUserId.value ? `rating_user:${ratingUserId.value}` : 'rating_user'
   } else {
     placesStore.filters.sort = v
     ratingUserId.value = ''
   }
-  fetchFiltered()
-  closeDrawer()
 }
 function onRatingUserChange() {
   if (ratingUserId.value) {
     placesStore.filters.sort = `rating_user:${ratingUserId.value}`
-    fetchFiltered()
-    closeDrawer()
   }
 }
 // Чип «sort ×» в шапке результатов — наоборот, апплаит сразу: юзер уже
@@ -500,33 +491,24 @@ const attendedVisible = computed(() => {
   if (!q) return friends.value
   return friends.value.filter(u => (u.username || '').toLowerCase().includes(q))
 })
-// Чип «Кто был» — quick action: применяем сразу и закрываем дровер,
-// иначе UX-конфуз: чип визуально включился, но результаты не дёрнулись,
-// а Bootstrap всё ещё держит body-scroll lock.
+// Чип «Кто был» — ТОЛЬКО toggle state, apply по «применить» (consistent
+// с остальными контролами в дровере).
 function toggleAttended(id) {
   const arr = placesStore.filters.attended_by || []
   placesStore.filters.attended_by = arr.includes(id) ? arr.filter(x => x !== id) : [...arr, id]
-  fetchFiltered()
-  closeDrawer()
 }
 
-function closeDrawer() {
-  // Bootstrap.Offcanvas API даёт race-condition при hide() сразу после
-  // открытия — body остаётся залочен на overflow:hidden. Кликаем по
-  // data-bs-dismiss-кнопке — это симулирует «юзер закрыл», Bootstrap
-  // отрабатывает свой обычный hide-flow корректно.
-  const el = document.getElementById('placesFilterDrawer')
-  const dismissBtn = el?.querySelector('[data-bs-dismiss="offcanvas"]')
-  if (dismissBtn) dismissBtn.click()
-  // Подстраховка через 350мс (Bootstrap-анимация ~300мс): если что-то
-  // зависло — снимаем backdrop и body-lock вручную.
-  setTimeout(() => {
-    if (!document.querySelector('.offcanvas.show')) {
-      document.querySelectorAll('.offcanvas-backdrop').forEach(b => b.remove())
-      document.body.style.overflow = ''
-      document.body.style.paddingRight = ''
-    }
-  }, 350)
+// drawer-close: кнопка «применить» / ✕ имеют data-bs-dismiss="offcanvas"
+// и закрываются самим Bootstrap'ом. Дополнительная подстраховка от
+// застрявшего body.overflow=hidden — слушаем hidden.bs.offcanvas.
+function onDrawerHidden() {
+  // Bootstrap иногда не убирает body-lock если hide() триггерится сразу
+  // после show() (race). Чистим вручную.
+  if (!document.querySelector('.offcanvas.show')) {
+    document.querySelectorAll('.offcanvas-backdrop').forEach(b => b.remove())
+    document.body.style.overflow = ''
+    document.body.style.paddingRight = ''
+  }
 }
 function friendName(id) {
   return friends.value.find(u => u.id === id)?.username || ''
@@ -554,9 +536,7 @@ function applyDatePreset(key) {
     placesStore.filters.visit_from = isoDate(from)
     placesStore.filters.visit_to   = isoDate(now)
   }
-  // Date-preset — quick action, как chip «Кто был».
-  fetchFiltered()
-  closeDrawer()
+  // Apply по «применить» — consistent с остальными контролами.
 }
 const activePreset = computed(() => {
   const f = placesStore.filters
@@ -774,6 +754,9 @@ onMounted(async () => {
   await fetchCities()
   await fetchFriends()
   await placesStore.fetchPlaces()
+  // Подстраховка: ловим закрытие дровера и форсим разлоченный body.
+  const drawer = document.getElementById('placesFilterDrawer')
+  if (drawer) drawer.addEventListener('hidden.bs.offcanvas', onDrawerHidden)
 })
 </script>
 
@@ -1192,6 +1175,11 @@ onMounted(async () => {
   padding: 10px 18px;
   font-family: var(--sb-serif);
   font-style: italic;
+  font-size: 16px;
+  font-weight: 500;
+  box-shadow:
+    0 1px 1px rgba(40, 30, 20, 0.1),
+    0 4px 12px rgba(40, 30, 20, 0.18);
   &:hover { background: oklch(0.55 0.14 30); color: var(--sb-on-accent); }
 }
 .reset-btn {
@@ -1200,6 +1188,7 @@ onMounted(async () => {
   color: var(--sb-ink-mute);
   text-decoration: none;
 }
+
 
 /* Q5 — «кто был»: лента аватарок-чипов с многоточным выбором. */
 .att-chips {

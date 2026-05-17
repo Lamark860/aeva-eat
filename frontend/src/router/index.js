@@ -83,7 +83,14 @@ const routes = [
 
 const router = createRouter({
   history: createWebHistory(),
-  routes
+  routes,
+  // Скролл сбрасывается в начало при переходе на новый route, кроме
+  // случая навигации browser-back/forward (там возвращаем сохранённую
+  // позицию — иначе теряешь контекст при свайпе «назад» на iOS).
+  scrollBehavior(to, from, savedPosition) {
+    if (savedPosition) return savedPosition
+    return { top: 0, left: 0 }
+  },
 })
 
 router.beforeEach((to, from, next) => {
