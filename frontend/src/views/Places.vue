@@ -412,6 +412,9 @@ const sortBase = computed(() => {
   return s.startsWith('rating_user:') ? 'rating_user' : s
 })
 const ratingUserId = ref('')
+// Внутри дровера sort/rating-user меняют ТОЛЬКО state, не дёргают
+// fetch — иначе результаты прыгают пока юзер ещё крутит селект.
+// Apply случается по кнопке «применить» внизу дровера.
 function onSortChange(e) {
   const v = e.target.value
   if (v === 'rating_user') {
@@ -420,14 +423,14 @@ function onSortChange(e) {
     placesStore.filters.sort = v
     ratingUserId.value = ''
   }
-  fetchFiltered()
 }
 function onRatingUserChange() {
   if (ratingUserId.value) {
     placesStore.filters.sort = `rating_user:${ratingUserId.value}`
-    fetchFiltered()
   }
 }
+// Чип «sort ×» в шапке результатов — наоборот, апплаит сразу: юзер уже
+// в режиме результатов и явно хочет убрать фильтр.
 function clearSort() {
   placesStore.filters.sort = ''
   ratingUserId.value = ''
@@ -518,7 +521,7 @@ function applyDatePreset(key) {
     placesStore.filters.visit_from = isoDate(from)
     placesStore.filters.visit_to   = isoDate(now)
   }
-  fetchFiltered()
+  // Date-preset внутри дровера — не апплаит, ждёт «применить».
 }
 const activePreset = computed(() => {
   const f = placesStore.filters
@@ -546,7 +549,20 @@ function clearDateRange() {
   fetchFiltered()
 }
 
-const showShelves = computed(() => !placesStore.filters.search && activeFilterCount.value === 0)
+// Полки (Жемчужины / По городам / По кухням) — entry-point до первого
+// фильтра. Если юзер ХОТЯ БЫ РАЗ открыл результаты (фильтром или поиском),
+// больше не возвращаемся в полки даже после сброса всего: показываем
+// «все места» списком. Иначе впечатление «всё пропало», нужно скроллить
+// обратно к полкам и тапать заново. Сбросить полностью можно reload'ом.
+const wasFiltered = ref(false)
+const showShelves = computed(() => {
+  if (wasFiltered.value) return false
+  return !placesStore.filters.search && activeFilterCount.value === 0
+})
+watch(
+  () => placesStore.filters.search + '|' + activeFilterCount.value,
+  () => { if (placesStore.filters.search || activeFilterCount.value > 0) wasFiltered.value = true },
+)
 
 // shelves derived from currently-loaded places
 const topGems = computed(() => placesStore.places.filter((p) => p.is_gem_place).slice(0, 5))

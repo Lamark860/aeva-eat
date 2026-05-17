@@ -106,49 +106,58 @@ FROM (VALUES
 ) AS p(name, address, city, lat, lng, ct, img, who)
 ON CONFLICT DO NOTHING;
 
--- 3) Reviews. Используем cross join seed_places × seed_users чтобы каждое
--- место получило 1-3 отзыва от разных авторов. Часть с длинными комментами
--- (для Q-layout PhotoFreeCard и цитаты от круга в B1). Часть с is_gem.
+-- 3) Reviews. Cross join seed_places × seed_users → 1-3 отзыва на место от
+-- разных авторов. Шаблоны комментариев индексируются глобальным sequence,
+-- а не hash от (place_id, user_id) — иначе на одном месте легко получить
+-- два одинаковых текста (свойство `(31*N + u) % 4` повторяется через 4).
+-- 16 шаблонов с запасом, чтобы внутри одного места дубль не появлялся.
 WITH
-  sp AS (SELECT id, name, created_by FROM places WHERE created_by IN (SELECT id FROM users WHERE username LIKE 'seed_%')),
-  su AS (SELECT id, username FROM users WHERE username LIKE 'seed_%' ORDER BY id),
+  sp AS (SELECT id, created_by FROM places WHERE created_by IN (SELECT id FROM users WHERE username LIKE 'seed_%')),
+  su AS (SELECT id FROM users WHERE username LIKE 'seed_%' ORDER BY id),
   ranked AS (
     SELECT
       sp.id AS place_id,
       su.id AS user_id,
-      su.username AS author,
-      sp.name AS place_name,
       ROW_NUMBER() OVER (PARTITION BY sp.id ORDER BY (sp.id * 13 + su.id * 7) % 100) AS rn,
       (sp.id * 31 + su.id) % 100 AS h
     FROM sp CROSS JOIN su
   ),
   picks AS (
-    -- Берём 1-3 отзыва на место (rn <= 1 + (place_id % 3))
-    SELECT * FROM ranked WHERE rn <= 1 + (place_id % 3)
+    SELECT *,
+      ROW_NUMBER() OVER (ORDER BY place_id, rn) AS seq
+    FROM ranked WHERE rn <= 1 + (place_id % 3)
   )
 INSERT INTO reviews (place_id, food_rating, service_rating, vibe_rating, is_gem, comment, visited_at, image_url, created_at)
 SELECT
   place_id,
-  -- рейтинги 6.5..9.5 со случайной вариацией
   6.5 + ((h * 7) % 30) / 10.0,
   6.5 + ((h * 11) % 30) / 10.0,
   6.5 + ((h * 13) % 30) / 10.0,
-  -- ~30% жемчужин (h % 10 < 3)
   (h % 10 < 3),
-  -- ~70% с длинным комментом (h % 10 < 7), варьируем 4 шаблона по h
-  CASE WHEN h % 10 < 7 THEN
-    CASE h % 4
-      WHEN 0 THEN 'Сидели у окна, обслуживание расслабленное, кухня уверенная. Хотим вернуться зимой на ужин-сюрприз.'
-      WHEN 1 THEN 'Заказали дегустацию. Главный хит — местная рыба с пюре из топинамбура. Десерт-провал, но это мелочь.'
-      WHEN 2 THEN 'Очень милое место, тихо. Хлеб домашний, вино подбирают с разбором. Уйти не могли часа три.'
-      ELSE         'Зашли случайно — оказались здесь на два часа. Винная карта камерная, но всё попадает. Тёплая встреча.'
+  -- ~85% reviews с комментом. Шаблон — по seq % 16, плюс соль (place_id, h),
+  -- чтобы соседние reviews одного места никогда не получали одинаковый текст.
+  CASE WHEN h % 20 < 17 THEN
+    CASE (seq + place_id) % 16
+      WHEN 0  THEN 'Сидели у окна, обслуживание расслабленное, кухня уверенная. Хотим вернуться зимой на ужин-сюрприз.'
+      WHEN 1  THEN 'Заказали дегустацию. Главный хит — местная рыба с пюре из топинамбура. Десерт-провал, но это мелочь.'
+      WHEN 2  THEN 'Очень милое место, тихо. Хлеб домашний, вино подбирают с разбором. Уйти не могли часа три.'
+      WHEN 3  THEN 'Зашли случайно — оказались здесь на два часа. Винная карта камерная, но всё попадает. Тёплая встреча.'
+      WHEN 4  THEN 'Стейк прожарили ровно по запросу, соус терияки в меру. Сервис заметили без напоминаний — это редкость.'
+      WHEN 5  THEN 'Камерное меню, две страницы. Шеф вышел поздороваться. По цене недёшево, но за такую внимательность не жалко.'
+      WHEN 6  THEN 'Свет тусклый, музыка громче, чем хотелось. Еда — твёрдые шесть из десяти. Не звезда, но место запомнили.'
+      WHEN 7  THEN 'Закуски лучше горячего: севиче из дорадо и хумус с фисташками. Десертам не хватает идеи.'
+      WHEN 8  THEN 'Полный зал в среду в 22:30 — это уже о чём-то говорит. Брали тартар и тыкву на гриле, обе позиции отличные.'
+      WHEN 9  THEN 'Хорошо для деловых обедов, шумно вечером. Кофе — лучше любого соседнего, фильтр выбирают руками.'
+      WHEN 10 THEN 'Завтрак подают до полудня, очередь с 10. Если успеть — вафли с творогом и инжиром стоят раннего подъёма.'
+      WHEN 11 THEN 'Маленький бар на 12 мест. Бариста с историей про каждую обжарку — попросите кенийский эфиоп.'
+      WHEN 12 THEN 'Вино домашнее, хозяйка — добрая, ушли только в три, обещали скоро вернуться компанией побольше.'
+      WHEN 13 THEN 'Лучшая запечённая капуста в городе. Грибы — тоже отлично. С мясом нам не повезло — пересушили рибай.'
+      WHEN 14 THEN 'Атмосфера: высокий потолок, старые книги, мягкие лампы. По меню — не звёзды, но всё ровно.'
+      ELSE         'Хотели быстро поужинать — задержались на три часа. Бармен предложил то, чего нет в карте, и не зря.'
     END
   ELSE NULL END,
-  -- visited_at: разбрасываем по последним 6 неделям
   CURRENT_DATE - ((h % 42) || ' days')::interval,
-  -- image_url: на 25% review-фото из пула seed_*.jpg
-  CASE WHEN h % 4 = 0 THEN '/uploads/seed_' || (1 + (h % 15)) || '.jpg' ELSE NULL END,
-  -- created_at в той же зоне для визуальной кучи
+  CASE WHEN seq % 4 = 0 THEN '/uploads/seed_' || (1 + ((seq * 7) % 15)) || '.jpg' ELSE NULL END,
   now() - ((h % 42) || ' days')::interval - ((h * 3 % 24) || ' hours')::interval
 FROM picks;
 

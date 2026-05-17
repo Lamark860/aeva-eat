@@ -45,10 +45,19 @@ function formatWeekRange(start) {
   return `${start.getDate()} ${RU_MONTH_GEN[start.getMonth()]} – ${end.getDate()} ${RU_MONTH_GEN[end.getMonth()]}`
 }
 
-// caption: "Probka · сб"
+// caption: "Probka · сб 19:42". Время добавляется, если в visit'е есть
+// часы/минуты не-полуночные — иначе показывать «00:00» для всех импортов
+// смотрится фальшиво.
 export function formatVisitCaption(name, date) {
   const d = new Date(date)
-  return `${name} · ${RU_WD[d.getDay()]}`
+  const wd = RU_WD[d.getDay()]
+  const hh = d.getHours()
+  const mm = d.getMinutes()
+  if (hh === 0 && mm === 0) {
+    return name ? `${name} · ${wd}` : wd
+  }
+  const time = `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`
+  return name ? `${name} · ${wd} ${time}` : `${wd} ${time}`
 }
 
 // Older buckets: collapse multiple weeks into a coarser label after ~3 weeks ago.
@@ -132,6 +141,7 @@ export function useFeed() {
           _attendeeIds: new Set(),
           _videos: [],
           _foodSum: 0, _serviceSum: 0, _vibeSum: 0, _ratingCount: 0,
+          _bestComment: '',
           id: `${ev.place_id}-${day}`,
           _placeId: ev.place_id,
           ...place,
@@ -143,6 +153,10 @@ export function useFeed() {
           avg_food: undefined,
           avg_service: undefined,
           avg_vibe: undefined,
+          // top_review_comment здесь означает «комментарий ИМЕННО этого визита»,
+          // а не самый длинный из всей истории места. Иначе два визита Blanche
+          // показывали бы одну и ту же цитату.
+          top_review_comment: undefined,
           // created_at заменим ниже на дату самой ранней встречи в группе —
           // нужно для caption'а «Place · вс/сб» в ArtifactCard.
           created_at: undefined,
@@ -157,6 +171,11 @@ export function useFeed() {
         g._vibeSum    += ev.vibe_rating    ?? 0
         g._ratingCount += 1
       }
+      // Q-layout фолбэк: ищем самый длинный коммент среди event'ов группы.
+      // Это всё ещё ОДИН визит (один день), но внутри него могут быть
+      // несколько отзывов от соавторов — берём самый информативный.
+      const c = (ev.comment || '').trim()
+      if (c && c.length > g._bestComment.length) g._bestComment = c
       // _date: берём самое раннее событие дня — карточка датируется началом визита
       const d = new Date(ev.occurred_at)
       if (d < g._date) g._date = d
@@ -175,12 +194,16 @@ export function useFeed() {
         g.review_count = g._ratingCount
       }
       g.created_at = g._date.toISOString()
+      // Per-visit Q-layout цитата. Если коммента нет — PhotoFreeCard
+      // упадёт в T-layout, не на place-уровневую цитату.
+      g.top_review_comment = g._bestComment || ''
       delete g._videos
       delete g._attendeeIds
       delete g._foodSum
       delete g._serviceSum
       delete g._vibeSum
       delete g._ratingCount
+      delete g._bestComment
       out.push(g)
     }
 

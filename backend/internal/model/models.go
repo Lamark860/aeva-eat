@@ -201,6 +201,10 @@ type FeedEvent struct {
 	FoodRating    *float64 `json:"food_rating,omitempty"`
 	ServiceRating *float64 `json:"service_rating,omitempty"`
 	VibeRating    *float64 `json:"vibe_rating,omitempty"`
+	// Comment — текст конкретного review этого события. Фронт использует его
+	// в PhotoFreeCard Q-layout, чтобы каждый визит места на Доске показывал
+	// свой комментарий, а не один и тот же top_review_comment места.
+	Comment *string `json:"comment,omitempty"`
 }
 
 // CityAggregate — строка для /api/cities: имя города + счётчики мест,
