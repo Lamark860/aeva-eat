@@ -256,15 +256,21 @@ function cellTilt(item) {
   return pool[Math.abs(h) % pool.length]
 }
 
-// A1 — full-width «звезда» раз в 5+ карточек (NEXT.md §A1). Только для
-// place-артефактов (записки и wishlist-планы не становятся звездой).
-// Приоритет: первая жемчужина > первый place-item (если в бакете ≥5 элементов).
+// D2 — ровно ОДНА full-width «звезда» на неделю. Иерархия выбора:
+// 1) первая жемчужина (статусный артефакт сильнее),
+// 2) первый place с видео-кружком (кружок крупнее на full-width),
+// 3) первый place любой природы.
+// Требование на ≥5 элементов сохранили — на тонких неделях звезда лишняя.
+// Записки и wishlist-планы звездой не становятся (концептуально не «находка»).
 function pickFeaturedId(items) {
   if (!items || items.length < 5) return null
   const placeItems = items.filter(i => i._kind === 'place')
   if (!placeItems.length) return null
   const gem = placeItems.find(p => p.is_gem_place)
-  return (gem ?? placeItems[0])?.id ?? null
+  if (gem) return gem.id
+  const withVideo = placeItems.find(p => (p.video_url || (p.videos || []).length > 0))
+  if (withVideo) return withVideo.id
+  return placeItems[0]?.id ?? null
 }
 function isFeatured(item, bucketItems) {
   if (item._kind !== 'place') return false
@@ -352,9 +358,10 @@ onMounted(() => {
 .doska-week {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  // dense — мелкие артефакты подтягиваются под full-width к свободным
-  // местам, чтобы после «звезды» не оставался зазор справа.
-  grid-auto-flow: dense;
+  // D3 — `dense` убран: он подтягивает мелкие артефакты к свободным
+  // ячейкам и тем самым ломает хронологию (записка вторника визуально
+  // оказывается под визитом среды). Пустая ячейка после full-width
+  // считается приемлемой ценой за читаемую последовательность.
   gap: 28px 14px;
   // Extra bottom padding so tilted polaroid shadows don't visually collide
   // with whatever follows (collapsed strip / archive footer).
@@ -376,11 +383,10 @@ onMounted(() => {
     transform: rotate(-0.6deg);
   }
 
-  // Q-video: место с видео получает всю строку. Кружочек прилипает к карточке
-  // изнутри ArtifactCard — отдельной KruzhokDivider-ячейки больше нет.
-  // Дополнительный padding-bottom — чтобы тень кружочка не наезжала на следующий ряд.
+  // Q-video: чтобы тень видео-кружочка не наезжала на следующий ряд.
+  // Full-width больше не выдаём автоматически — это решается через .featured
+  // (см. pickFeaturedId, иерархия gem > video > first).
   &.has-video {
-    grid-column: 1 / -1;
     padding-bottom: 14px;
   }
 }

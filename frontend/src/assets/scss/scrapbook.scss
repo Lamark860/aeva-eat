@@ -63,6 +63,10 @@
   z-index: 0;
 }
 .sb-paper > * { position: relative; z-index: 1; }
+// Исключение: Bootstrap .offcanvas обязан остаться position:fixed чтобы
+// всплывать поверх контента и не растягивать .sb-paper. Иначе на /map
+// drawer уезжает под Yandex-карту и кнопки внизу недоступны.
+.sb-paper > .offcanvas { position: fixed; z-index: 1045; }
 
 // =============================================
 // Wordmark — top-of-screen brand for Доска

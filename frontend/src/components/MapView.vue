@@ -14,11 +14,14 @@ const props = defineProps({
   singleMarker: { type: Boolean, default: false },
 })
 
-const emit = defineEmits(['marker-click'])
+// marker-click больше не эмитится — balloon открывается дефолтно. Оставляем
+// объявление в defineEmits на будущее (родитель не должен сломаться).
+defineEmits(['marker-click'])
 
 const mapContainer = ref(null)
 let map = null
 let placemarks = []
+let clusterer = null
 
 // Scrapbook palette as hex (OKLCH not universally rendered inside Yandex placemarks)
 const C = {
@@ -200,8 +203,46 @@ function escapeHtml(s) {
 function updateMarkers() {
   if (!map) return
 
+  // Clusterer: на низком зуме маркеры в одной точке (Россия целиком)
+  // накладывались и блокировали клики друг другу. Кластер группирует их
+  // в один скрапбук-маркер (бумажная плашка с числом), на тап раздвигает.
+  if (clusterer) {
+    clusterer.removeAll()
+    map.geoObjects.remove(clusterer)
+  }
   placemarks.forEach((pm) => map.geoObjects.remove(pm))
   placemarks = []
+
+  // Скрапбук-кластер: paper-плашка с числом, как мини-штамп. SVG: серо-
+  // охровый прямоугольник с пунктирной обводкой + рукописное число
+  // внутри (Caveat). Стиль матчит штампы из шапок и места.
+  const ClusterLayout = ymaps.templateLayoutFactory.createClass(`
+    <div style="position:relative;width:48px;height:48px;cursor:pointer;">
+      <svg width="48" height="48" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <filter id="cl-shadow" x="-30%" y="-10%" width="160%" height="160%">
+            <feDropShadow dx="0" dy="2" stdDeviation="2" flood-opacity="0.32"/>
+          </filter>
+        </defs>
+        <circle cx="24" cy="24" r="20" fill="#fdfcf7" stroke="${C.terra}" stroke-width="1.6" filter="url(#cl-shadow)"/>
+        <circle cx="24" cy="24" r="16" fill="none" stroke="${C.terra}" stroke-width="1" stroke-dasharray="2 2" opacity="0.55"/>
+      </svg>
+      <span style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-family:Caveat,cursive;font-size:20px;font-weight:600;color:${C.terraDark};line-height:1;">{{ properties.geoObjects.length }}</span>
+    </div>
+  `)
+
+  clusterer = new ymaps.Clusterer({
+    clusterIconLayout: ClusterLayout,
+    clusterIconShape: { type: 'Circle', coordinates: [24, 24], radius: 22 },
+    groupByCoordinates: false,
+    clusterDisableClickZoom: false,
+    // hideIconOnBalloonOpen: true (default) — иначе после close balloon
+    // Yandex не восстанавливает корректно event-pipeline иконки, и
+    // повторные клики промахиваются.
+    minClusterSize: 3,
+    gridSize: 64,
+    hasBalloon: false, // на тап кластера — зум вглубь, без balloon-списка
+  })
 
   const coords = []
   props.places.forEach((place) => {
@@ -218,10 +259,17 @@ function updateMarkers() {
     const w = isGem ? 44 : 40
     const h = isGem ? 54 : 52
 
-    const MarkerLayout = ymaps.templateLayoutFactory.createClass(
-      `<div style="position:relative;width:${w}px;height:${h}px;">${svg}</div>`,
-    )
+    // iconLayout: SVG напрямую, без обёрточного div. Yandex обернёт его
+    // в свой overlay; лишний <div style="position:relative"> только мешал
+    // hit-detect'у. pointer-events на SVG включён по умолчанию.
+    const MarkerLayout = ymaps.templateLayoutFactory.createClass(svg)
 
+    // Hit-target: Rectangle покрывает весь visible SVG (head + needle) с
+    // запасом 4px по бокам — на touch tap часто промахивается на 4-8px,
+    // а Circle вокруг только головки (мой предыдущий подход) оставлял
+    // иглу и нижнюю половину неотзывчивыми. Сейчас вся область пина
+    // ловит тап надёжно. coords относительно якоря (низ-центр SVG).
+    const pad = 4
     const pm = new ymaps.Placemark(
       [place.lat, place.lng],
       {
@@ -230,18 +278,28 @@ function updateMarkers() {
       },
       {
         iconLayout: MarkerLayout,
-        // anchor at the needle tip (bottom-center)
-        iconShape: { type: 'Rectangle', coordinates: [[-w / 2, -h], [w / 2, 0]] },
+        iconShape: { type: 'Rectangle', coordinates: [[-(w / 2 + pad), -(h + pad)], [(w / 2 + pad), pad]] },
         iconOffset: [-(w / 2), -h],
-        hideIconOnBalloonOpen: false,
+        // hideIconOnBalloonOpen: true (default) — Yandex прячет иконку
+        // когда balloon открыт. При close восстанавливает корректно.
+        // Если оставить false — после close клики промахиваются.
       },
     )
 
-    pm.events.add('click', () => emit('marker-click', place))
-    map.geoObjects.add(pm)
+    // Click → открывается balloon с preview (бумажная плашка, обложка,
+    // рейтинги, ссылка «подробнее →»). Раньше эмитили marker-click и
+    // родитель сразу делал router.push — превью посмотреть было нельзя.
     placemarks.push(pm)
     coords.push([place.lat, place.lng])
   })
+
+  // Кластеризатор берёт все placemark'и сразу — это эффективнее, чем
+  // добавлять по одному. Внутри groupByCoordinates=false он сам решает
+  // что сложить вместе по gridSize.
+  if (placemarks.length > 0) {
+    clusterer.add(placemarks)
+    map.geoObjects.add(clusterer)
+  }
 
   if (coords.length > 0 && !props.singleMarker) {
     map

@@ -39,7 +39,9 @@
       />
     </template>
 
-    <!-- T: билетик-доминанта (нет цитаты, нет жемчужины) -->
+    <!-- T: билетик-доминанта (нет цитаты, нет жемчужины).
+         Короткий коммент (если есть, до Q-порога) — мелким caveat'ом под
+         ticket: иначе впечатление полностью теряется. -->
     <template v-else>
       <h3 class="pfc-name pfc-name--lg">{{ place.name }}</h3>
       <div v-if="metaLine" class="pfc-meta">{{ metaLine }}</div>
@@ -51,6 +53,7 @@
         :service="place.avg_service"
         :vibe="place.avg_vibe"
       />
+      <p v-if="shortComment" class="pfc-short-comment">«{{ shortComment }}»</p>
     </template>
 
     <!-- День и час визита — общий для всех трёх layout'ов, чтобы было видно
@@ -111,6 +114,9 @@ const metaLine = computed(() => {
 const visitCaption = computed(() => {
   const d = props.place.created_at || props.place.updated_at
   if (!d) return ''
+  if (props.place.visits_count > 1) {
+    return `×${props.place.visits_count} за неделю`
+  }
   return formatVisitCaption('', d).trim()
 })
 
@@ -118,6 +124,13 @@ const quoteText = computed(() => {
   const c = (props.place.top_review_comment || '').trim()
   if (c.length <= QUOTE_MAX) return c
   return c.slice(0, QUOTE_MAX - 1).trimEnd() + '…'
+})
+// Короткий коммент (для T-layout) — длина <30, иначе попал бы в Q. Пустой
+// тоже игнорируем. Урезаем на всякий случай.
+const shortComment = computed(() => {
+  const c = (props.place.top_review_comment || '').trim()
+  if (!c || c.length >= 30) return ''
+  return c
 })
 
 // G > Q > T — приоритет: если место gem, оно всегда штамп-доминанта,
@@ -130,7 +143,7 @@ const layout = computed(() => {
 })
 
 const tapeVariants = ['', 'rose', 'mint', 'blue']
-const tapeVariant = computed(() => tapeVariants[(props.place.id ?? 0) % tapeVariants.length])
+const tapeVariant = computed(() => tapeVariants[(props.place._placeId ?? props.place.id ?? 0) % tapeVariants.length])
 const tapeStyle = computed(() => {
   const variants = [
     { top: '-9px', left: '24px', transform: 'rotate(-10deg)' },
@@ -138,7 +151,7 @@ const tapeStyle = computed(() => {
     { top: '-8px', right: '18px', transform: 'rotate(8deg)' },
     { top: '-9px', right: '30px', transform: 'rotate(-6deg)' },
   ]
-  return variants[(props.place.id ?? 0) % variants.length]
+  return variants[(props.place._placeId ?? props.place.id ?? 0) % variants.length]
 })
 </script>
 
@@ -157,6 +170,12 @@ const tapeStyle = computed(() => {
   color: inherit;
   text-decoration: none;
   min-height: 156px;
+  // Гарантированная ширина — иначе ticket+название не помещаются и текст
+  // выглядит как кассовый чек по слову на строку. Парент (.art-photo-main)
+  // тоже имеет min-width: 180px, это страховка для случаев когда PFC
+  // используется отдельно (например, на /gems, /cities).
+  min-width: 180px;
+  word-break: break-word;
 }
 .pfc--featured {
   padding: 28px 22px 22px;
@@ -213,6 +232,19 @@ const tapeStyle = computed(() => {
   font-size: 14px;
   color: var(--sb-ink-mute);
   margin-top: 6px;
+}
+
+/* Короткий коммент в T-layout: мелкий caveat без visual-веса цитаты.
+   Кавычки-ёлочки в самом тексте (не отдельным span'ом) — слишком мелко
+   для отдельных stamped marks. */
+.pfc-short-comment {
+  font-family: var(--sb-hand);
+  font-size: 15px;
+  line-height: 1.3;
+  color: var(--sb-ink-mute);
+  margin: 4px 0 0;
+  padding: 0;
+  word-break: break-word;
 }
 
 /* Q — крупная рукописная цитата с кавычками-ёлочками */

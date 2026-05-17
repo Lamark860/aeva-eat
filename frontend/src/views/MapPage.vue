@@ -62,7 +62,7 @@
       <div class="offcanvas-body">
         <div class="mb-3">
           <label class="drawer-label">Город</label>
-          <select v-model="placesStore.filters.city" class="form-select">
+          <select v-model="draft.city" class="form-select">
             <option value="">все</option>
             <option v-for="city in cities" :key="city" :value="city">{{ city }}</option>
           </select>
@@ -70,8 +70,8 @@
         <div class="mb-3">
           <label class="drawer-label">Кухни</label>
           <MultiSelect
-            :modelValue="placesStore.filters.cuisine_type_ids"
-            @update:model-value="v => placesStore.filters.cuisine_type_ids = v"
+            :modelValue="draft.cuisine_type_ids"
+            @update:model-value="v => draft.cuisine_type_ids = v"
             :options="catalogs.cuisineTypes"
             placeholder="любые"
           />
@@ -79,19 +79,19 @@
         <div class="mb-3">
           <label class="drawer-label">Категории</label>
           <MultiSelect
-            :modelValue="placesStore.filters.category_ids"
-            @update:model-value="v => placesStore.filters.category_ids = v"
+            :modelValue="draft.category_ids"
+            @update:model-value="v => draft.category_ids = v"
             :options="catalogs.categories"
             placeholder="любые"
           />
         </div>
         <div class="form-check form-switch mb-3">
-          <input v-model="placesStore.filters.is_gem" class="form-check-input" type="checkbox" id="gemFilterMap" role="switch" />
+          <input v-model="draft.is_gem" class="form-check-input" type="checkbox" id="gemFilterMap" role="switch" />
           <label class="form-check-label" for="gemFilterMap">только&nbsp;жемчужины&nbsp;♦</label>
         </div>
         <div class="d-grid gap-2 mt-4">
-          <button class="btn btn-apply" data-bs-dismiss="offcanvas" @click="fetchFiltered">применить</button>
-          <button class="btn btn-link reset-btn" @click="resetFilters">сбросить</button>
+          <button class="btn btn-apply" data-bs-dismiss="offcanvas" @click="applyDraft">применить</button>
+          <button class="btn btn-link reset-btn" @click="resetDraft">сбросить</button>
         </div>
       </div>
     </div>
@@ -99,7 +99,7 @@
 </template>
 
 <script setup>
-import { onMounted, onBeforeUnmount, computed, ref, watch } from 'vue'
+import { onMounted, onBeforeUnmount, computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { usePlacesStore } from '../stores/places'
 import { useCatalogsStore } from '../stores/catalogs'
@@ -133,14 +133,6 @@ const activeFilterCount = computed(() => {
   return n
 })
 
-function resetFilters() {
-  placesStore.filters.city = ''
-  placesStore.filters.cuisine_type_ids = []
-  placesStore.filters.category_ids = []
-  placesStore.filters.is_gem = false
-  fetchFiltered()
-}
-
 function clearSearch() {
   placesStore.filters.search = ''
   fetchFiltered()
@@ -167,17 +159,48 @@ async function fetchCities() {
   } catch { /* ignore */ }
 }
 
-// Re-fetch when filters change (covers offcanvas auto-close paths).
-watch(
-  () => [placesStore.filters.city, placesStore.filters.cuisine_type_ids, placesStore.filters.category_ids, placesStore.filters.is_gem],
-  () => fetchFiltered(),
-  { deep: true },
-)
+// ---- Draft state для drawer (как в Places.vue) ----
+// Drawer пишет в локальный draft, apply копирует в store + fetch. Иначе
+// каждый тап чекбокса в drawer'е дёргал бы карту через watch-deep.
+const draft = ref({ city: '', cuisine_type_ids: [], category_ids: [], is_gem: false })
+function seedDraft() {
+  const f = placesStore.filters
+  draft.value = {
+    city: f.city || '',
+    cuisine_type_ids: [...(f.cuisine_type_ids || [])],
+    category_ids: [...(f.category_ids || [])],
+    is_gem: !!f.is_gem,
+  }
+}
+function applyDraft() {
+  const f = placesStore.filters
+  const d = draft.value
+  f.city = d.city
+  f.cuisine_type_ids = [...d.cuisine_type_ids]
+  f.category_ids = [...d.category_ids]
+  f.is_gem = d.is_gem
+  fetchFiltered()
+}
+function resetDraft() {
+  draft.value = { city: '', cuisine_type_ids: [], category_ids: [], is_gem: false }
+}
+function onDrawerHidden() {
+  if (!document.querySelector('.offcanvas.show')) {
+    document.querySelectorAll('.offcanvas-backdrop').forEach(b => b.remove())
+    document.body.style.overflow = ''
+    document.body.style.paddingRight = ''
+  }
+}
 
 onMounted(async () => {
   await catalogs.fetchAll()
   await fetchCities()
   await placesStore.fetchAllPlaces()
+  const drawer = document.getElementById('mapFilterDrawer')
+  if (drawer) {
+    drawer.addEventListener('show.bs.offcanvas', seedDraft)
+    drawer.addEventListener('hidden.bs.offcanvas', onDrawerHidden)
+  }
 })
 </script>
 

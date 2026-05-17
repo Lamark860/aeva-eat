@@ -1,8 +1,8 @@
 <template>
   <router-link
-    :to="`/places/${place.id}`"
+    :to="`/places/${place._placeId ?? place.id}`"
     class="sb-artifact"
-    :class="{ featured, 'no-photo': isTicketOnly, 'has-kruzhok': visibleVideos.length > 0 }"
+    :class="{ featured, 'no-photo': isTicketOnly, 'has-kruzhok': allVideos.length > 0 }"
     :aria-label="place.name"
   >
     <!-- A3 — безфотный артефакт. PhotoFreeCard сам выбирает раскладку Q/T/G
@@ -18,31 +18,7 @@
             :attendees="attendees"
           />
         </div>
-
-        <div v-if="visibleVideos.length" class="art-kruzhoki">
-          <span
-            v-for="(url, i) in visibleVideos"
-            :key="`tk-${i}-${url}`"
-            class="art-kruzhok-layer"
-            :style="kruzhokLayerStyle(i)"
-            @click.stop.prevent="onKruzhokClick"
-          >
-            <video
-              class="art-kruzhok-video"
-              :src="url"
-              preload="metadata"
-              muted
-              playsinline
-              disablepictureinpicture
-              aria-hidden="true"
-              @loadedmetadata="forcePoster"
-              @ended="onVideoEnded"
-            ></video>
-            <span class="art-kruzhok-play" aria-hidden="true"></span>
-            <span class="art-kruzhok-hint" aria-hidden="true">тапни</span>
-          </span>
-          <span v-if="extraVideos > 0" class="art-kruzhok-extra">+{{ extraVideos }}</span>
-        </div>
+        <KruzhokStack :videos="allVideos" :size="featured ? 'large' : 'normal'" />
       </div>
     </template>
 
@@ -90,36 +66,7 @@
           </div>
         </div>
 
-        <!-- Q-video: видео-кружочки рядом с полароидом «в ряду», стопкой
-             как PolaroidStack — каждый следующий чуть прикрывает предыдущий.
-             preload=metadata + muted+playsinline — браузер вытаскивает первый
-             кадр без автозапуска; iOS требует и то и другое.
-             Видно только при наличии реального video_url (иначе пустой
-             белый круг — что выловил дизайнер). -->
-        <div v-if="visibleVideos.length" class="art-kruzhoki">
-          <span
-            v-for="(url, i) in visibleVideos"
-            :key="`kr-${i}-${url}`"
-            class="art-kruzhok-layer"
-            :style="kruzhokLayerStyle(i)"
-            @click.stop.prevent="onKruzhokClick"
-          >
-            <video
-              class="art-kruzhok-video"
-              :src="url"
-              preload="metadata"
-              muted
-              playsinline
-              disablepictureinpicture
-              aria-hidden="true"
-              @loadedmetadata="forcePoster"
-              @ended="onVideoEnded"
-            ></video>
-            <span class="art-kruzhok-play" aria-hidden="true"></span>
-            <span class="art-kruzhok-hint" aria-hidden="true">тапни</span>
-          </span>
-          <span v-if="extraVideos > 0" class="art-kruzhok-extra">+{{ extraVideos }}</span>
-        </div>
+        <KruzhokStack :videos="allVideos" :size="featured ? 'large' : 'normal'" />
       </div>
 
       <div v-if="hasStack && caption" class="sb-stack-caption">{{ caption }}</div>
@@ -134,6 +81,12 @@
       </div>
 
       <div v-if="metaLine" class="sb-meta">{{ metaLine }}</div>
+
+      <!-- Comment на фото-карточке. Раньше показывался только в PFC
+           (ticket-only), на фото-варианте текст молча терялся. Если
+           короткий — мелкий caveat под meta, если длинный — обрезаем
+           многоточием (полный читается на странице места). -->
+      <p v-if="commentText" class="sb-comment">«{{ commentText }}»</p>
     </template>
   </router-link>
 </template>
@@ -143,6 +96,7 @@ import { computed } from 'vue'
 import Polaroid from './Polaroid.vue'
 import PolaroidStack from './PolaroidStack.vue'
 import PhotoFreeCard from './PhotoFreeCard.vue'
+import KruzhokStack from './KruzhokStack.vue'
 import Tape from './Tape.vue'
 import Ticket from './Ticket.vue'
 import GemBadge from './GemBadge.vue'
@@ -161,10 +115,10 @@ const props = defineProps({
 })
 
 const placeholderPalette = ['sb-photo-warm', 'sb-photo-olive', 'sb-photo-dusk', 'sb-photo-sage', 'sb-photo-peach', 'sb-photo-brick', 'sb-photo-cream', 'sb-photo-slate', 'sb-photo-indigo']
-const placeholderClass = computed(() => placeholderPalette[(props.place.id ?? 0) % placeholderPalette.length])
+const placeholderClass = computed(() => placeholderPalette[(props.place._placeId ?? props.place.id ?? 0) % placeholderPalette.length])
 
 const tapeVariants = ['', 'rose', 'mint', 'blue']
-const tapeVariant = computed(() => tapeVariants[(props.place.id ?? 0) % tapeVariants.length])
+const tapeVariant = computed(() => tapeVariants[(props.place._placeId ?? props.place.id ?? 0) % tapeVariants.length])
 
 // Tape position varies per item for a less-uniform feel.
 const tapeStyle = computed(() => {
@@ -174,12 +128,18 @@ const tapeStyle = computed(() => {
     { top: '-8px',  right: '16px', transform: 'rotate(8deg)' },
     { top: '-9px',  right: '28px', transform: 'rotate(-6deg)' },
   ]
-  return variants[(props.place.id ?? 0) % variants.length]
+  return variants[(props.place._placeId ?? props.place.id ?? 0) % variants.length]
 })
 
 const caption = computed(() => {
   const d = props.place.created_at || props.place.updated_at
   if (!d) return props.place.name
+  // Если визитов больше 1 за неделю — показываем «Винни · ×3 за неделю»
+  // вместо точного времени. Время одного из визитов вводило бы в
+  // заблуждение: «во сколько ходили» — а ходили несколько раз.
+  if (props.place.visits_count > 1) {
+    return `${props.place.name} · ×${props.place.visits_count} за неделю`
+  }
   return formatVisitCaption(props.place.name, d)
 })
 
@@ -198,10 +158,9 @@ const extraReviewers = computed(() => Math.max(0, allReviewers.value.length - MA
 const stackPhotos = computed(() => props.place.feed_photos || [])
 const hasStack = computed(() => stackPhotos.value.length >= 2)
 
-// Q-video: список всех video_url для места. Бэк отдаёт `videos`
-// (свежие сверху) или fallback `video_url` для старого ответа. Стопка
-// кружочков рендерится и в ticket-only-режиме — flex-row даёт ей колонку
-// справа независимо от того, что внутри (полароид или билетик).
+// Q-video: список всех video_url для места. Бэк отдаёт `videos` (свежие
+// сверху) или fallback `video_url` для старого ответа. Сам рендер кружочков
+// и inline-play вынесены в KruzhokStack — здесь только источник данных.
 const allVideos = computed(() => {
   if (Array.isArray(props.place.videos) && props.place.videos.length > 0) {
     return props.place.videos
@@ -209,62 +168,6 @@ const allVideos = computed(() => {
   if (props.place.video_url) return [props.place.video_url]
   return []
 })
-const MAX_VIDEOS = 3
-const visibleVideos = computed(() => allVideos.value.slice(0, MAX_VIDEOS))
-const extraVideos = computed(() => Math.max(0, allVideos.value.length - MAX_VIDEOS))
-
-// Раскладка стопки: каждый следующий кружочек чуть ниже и со встречным
-// наклоном, по аналогии с PolaroidStack.
-function kruzhokLayerStyle(i) {
-  const tilts = ['rotate(-5deg)', 'rotate(4deg)', 'rotate(-3deg)']
-  return {
-    top: `${i * 38}px`,
-    transform: tilts[i % tilts.length],
-    zIndex: i + 1,
-  }
-}
-
-// preload=metadata в Safari/Chrome не всегда отрисовывает первый кадр —
-// видим прозрачный <video>. Принудительный seek на 0.1s заставляет браузер
-// декодировать и нарисовать кадр. Срабатывает один раз на loadedmetadata,
-// после чего отписываемся (если currentTime уже двинулся — кадр нарисован).
-// R5-Q5 — если за 500мс currentTime всё ещё 0 (браузер заснул на poster),
-// показываем текстовый плейсхолдер «тапни, чтобы посмотреть» на layer'е.
-function forcePoster(ev) {
-  const v = ev.target
-  if (!v || v.currentTime > 0) return
-  try { v.currentTime = 0.1 } catch (_) { /* fail-soft — не критично */ }
-  setTimeout(() => {
-    if (!v.isConnected) return
-    if (v.currentTime > 0) return
-    const layer = v.closest('.art-kruzhok-layer')
-    if (layer) layer.classList.add('posterless')
-  }, 500)
-}
-
-// Тап по кружочку играет/паузит видео inline вместо перехода на отзыв.
-// .stop.prevent в шаблоне глушит router-link на родителе. Класс .playing
-// прячет ▶-overlay, чтобы не загораживать картинку при просмотре.
-function onKruzhokClick(ev) {
-  const layer = ev.currentTarget
-  const video = layer.querySelector('video')
-  if (!video) return
-  if (video.paused) {
-    video.play().then(() => layer.classList.add('playing')).catch(() => {})
-  } else {
-    video.pause()
-    layer.classList.remove('playing')
-  }
-}
-
-// Видео доиграло — возвращаем оверлей ▶, чтобы понятно было что можно
-// тапнуть снова. Перематываем к началу для ровного второго просмотра.
-function onVideoEnded(ev) {
-  const v = ev.target
-  if (!v) return
-  v.currentTime = 0
-  v.parentElement?.classList.remove('playing')
-}
 
 const hasRatings = computed(() => {
   const p = props.place
@@ -290,6 +193,14 @@ const metaLine = computed(() => {
   if (props.place.city) parts.push(props.place.city)
   if (props.place.cuisine_type) parts.push(props.place.cuisine_type)
   return parts.join(' · ')
+})
+
+const COMMENT_MAX = 120
+const commentText = computed(() => {
+  const c = (props.place.top_review_comment || '').trim()
+  if (!c) return ''
+  if (c.length <= COMMENT_MAX) return c
+  return c.slice(0, COMMENT_MAX - 1).trimEnd() + '…'
 })
 </script>
 
@@ -426,159 +337,43 @@ const metaLine = computed(() => {
   text-overflow: ellipsis;
 }
 
-/* Q-video: кружочки видео живут в столбце справа от полароида и стопкой
-   накладываются друг на друга (ScreenshotStack-style). Внутри — настоящий
-   <video preload=metadata muted>, браузер рисует первый кадр как natural
-   poster, без сплошной тёмной подложки. */
+/* .art-photo — flex-row контейнер: основной контент (полароид или PFC)
+   слева, KruzhokStack справа. На узких колонках стопка кружочков мешает
+   тексту — переносим её под main через flex-wrap (см. min-width ниже). */
 .art-photo {
   display: flex;
   align-items: flex-start;
   gap: 10px;
+  flex-wrap: wrap;
 }
 .art-photo-main {
   position: relative;
   flex: 1 1 auto;
-  min-width: 0;
+  // Минимальная ширина main-колонки — иначе текст PFC (название, цитата,
+  // короткий коммент) превращается в «чек» по одному слову на строку.
+  // Если карточка узкая (узкая 2-колоночная сетка + kruzhok сбоку),
+  // flex-wrap переносит kruzhok вниз — это нормально для скрапбука.
+  min-width: 180px;
 }
 /* Ticket-only вариант: бумажная плашка не должна растягиваться на всю
-   full-width-ячейку — иначе торчит широкий белый фон. Сжимаем главную
-   колонку под содержимое; кружочки остаются справа сразу за билетиком,
-   остаток строки — просто бумажный фон ленты. */
+   full-width-ячейку — иначе торчит широкий белый фон. */
 .sb-artifact.no-photo .art-photo-main {
   flex: 0 1 auto;
   max-width: 360px;
 }
-.art-kruzhoki {
-  position: relative;
-  flex: 0 0 auto;
-  width: 64px;
-  /* высота вычисляется по числу видимых кружков:
-     56px на единственный + 38px на каждый следующий */
-  align-self: stretch;
-}
-.art-kruzhok-layer {
-  position: absolute;
-  left: 4px;
-  width: 56px;
-  height: 56px;
-  border-radius: 50%;
-  overflow: hidden;
-  /* Прозрачный фон — пока видео не подтянуло первый кадр, кружок не
-     должен торчать как белая «дыра». Бумажное кольцо вокруг даёт
-     скрапбук-вид; первый кадр вытягивается через @loadedmetadata seek. */
-  background: transparent;
-  box-shadow:
-    0 0 0 3px var(--sb-paper-card),
-    0 2px 4px rgba(40, 30, 20, 0.18),
-    0 6px 14px rgba(40, 30, 20, 0.16);
-  cursor: pointer;
-}
-.art-kruzhok-video {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display: block;
-  /* Chrome/WebKit при `transform` на родителе с overflow:hidden + border-radius
-     иногда не клипает <video> — он торчит квадратом. Клипаем само видео
-     border-radius'ом — это работает независимо от рендер-режима родителя. */
-  border-radius: 50%;
-}
 
-/* ▶ — полупрозрачный тёмный диск + белый треугольник по центру.
-   Оба pseudo абсолютно позиционированы и центрированы через
-   top/left 50% + отрицательный margin (надёжнее flex'а — flex рвался
-   когда ::before выходил из потока). .playing прячет оверлей. */
-.art-kruzhok-play {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  transition: opacity 180ms ease;
-  z-index: 2;
-}
-.art-kruzhok-play::before,
-.art-kruzhok-play::after {
-  content: '';
-  position: absolute;
-  top: 50%;
-  left: 50%;
-}
-.art-kruzhok-play::before {
-  width: 28px;
-  height: 28px;
-  margin: -14px 0 0 -14px;
-  border-radius: 50%;
-  background: rgba(20, 12, 6, 0.55);
-  backdrop-filter: blur(2px);
-  -webkit-backdrop-filter: blur(2px);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
-}
-.art-kruzhok-play::after {
-  width: 0;
-  height: 0;
-  /* border-trick: 5px 0 5px 8px = равнобедренный треугольник остриём вправо */
-  border-style: solid;
-  border-width: 5px 0 5px 8px;
-  border-color: transparent transparent transparent #fff;
-  /* центрируем оптический центр треугольника, а не bounding-box.
-     Высота 10px → -5px по вертикали. Ширина 8px, но визуально центр
-     треугольника смещён к острию — двигаем чуть-чуть вправо чтобы
-     не выглядело сбитым влево. */
-  margin: -5px 0 0 -3px;
-  filter: drop-shadow(0 1px 0.5px rgba(0, 0, 0, 0.25));
-}
-.art-kruzhok-layer.playing .art-kruzhok-play { opacity: 0; }
-.art-kruzhok-layer.playing .art-kruzhok-hint { opacity: 0; }
-
-/* R5-Q5 — текстовый плейсхолдер «тапни», если браузер за 500мс не нарисовал
-   первый кадр видео. Скрыт по умолчанию; показывается через класс .posterless,
-   который ставит forcePoster по таймауту. */
-.art-kruzhok-hint {
-  position: absolute;
-  inset: 0;
-  display: none;
-  align-items: center;
-  justify-content: center;
+/* Comment мелким caveat'ом под meta — впечатление визита, не цитата. */
+.sb-comment {
   font-family: var(--sb-hand);
-  font-size: 14px;
-  color: var(--sb-paper-card);
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
-  pointer-events: none;
-  z-index: 3;
-}
-.art-kruzhok-layer.posterless {
-  background: oklch(0.35 0.04 60); /* тёмная подложка чтобы текст читался */
-}
-.art-kruzhok-layer.posterless .art-kruzhok-hint { display: flex; }
-.art-kruzhok-layer.posterless .art-kruzhok-play { opacity: 0; }
-.art-kruzhok-extra {
-  position: absolute;
-  bottom: -14px;
-  right: -2px;
-  font-family: var(--sb-hand);
-  font-size: 14px;
+  font-size: 15px;
+  line-height: 1.3;
   color: var(--sb-ink-mute);
-  transform: rotate(-3deg);
-  pointer-events: none;
+  margin: 6px 0 0 4px;
+  padding: 0;
+  word-break: break-word;
 }
-
-/* На full-width-ячейке кружочки крупнее — пропорционально под full-width.
-   Диск-плеер тоже растёт чтобы оставаться читаемым; центрирующий margin
-   обновляется под новые размеры. */
-.sb-artifact.has-kruzhok {
-  .art-kruzhoki { width: 80px; }
-  .art-kruzhok-layer {
-    width: 70px;
-    height: 70px;
-    left: 5px;
-  }
-  .art-kruzhok-play::before {
-    width: 32px;
-    height: 32px;
-    margin: -16px 0 0 -16px;
-  }
-  .art-kruzhok-play::after {
-    border-width: 6px 0 6px 9px;
-    margin: -6px 0 0 -3.5px;
-  }
+.sb-artifact.featured .sb-comment {
+  font-size: 17px;
+  color: var(--sb-ink-soft);
 }
 </style>

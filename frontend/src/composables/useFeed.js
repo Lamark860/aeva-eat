@@ -115,36 +115,46 @@ export function useFeed() {
     }
   }
 
-  // Q4 — группировка place-артефактов по (place_id, day). Все review-события
-  // одного места за один день мерджатся: attendees объединяются (тот же
-  // визит, но соавторы могли запостить отдельно), videos накапливаются
-  // как список URL (один отзыв с видео не должен расширять соседа без видео).
-  // Разные дни → разные карточки — это и закрывает «раз в месяц туда же»
-  // как отдельные артефакты в ленте.
+  // Q4 — группировка place-артефактов по (place_id, week-bucket). 3 визита
+  // Винни за одну неделю с одинаковым cover'ом → 3 одинаковых полароида,
+  // визуальный мусор. Объединяем в одну карточку с ×N. На уровень дня
+  // не группируем — если 5 визитов за неделю это и есть бакет «5 раз
+  // за неделю», даты внутри не различимы пользователем (один артефакт
+  // на bucket-неделю).
   const items = computed(() => {
     const placeMap = new Map(places.value.map(p => [p.id, p]))
     const userMap  = new Map(users.value.map(u => [u.id, u]))
     const out = []
+    const now = new Date()
 
     const reviewGroups = new Map()
     for (const ev of events.value) {
       if (ev.kind !== 'review_added' || !ev.place_id) continue
       const place = placeMap.get(ev.place_id)
       if (!place) continue
-      const day = (ev.occurred_at || '').slice(0, 10)
-      const key = `${ev.place_id}|${day}`
+      const evDate = new Date(ev.occurred_at)
+      // week-bucket key. bucketKey ожидает START недели, не сам event date —
+      // иначе для архивных недель он использует event-дату как ISO-key,
+      // и разные дни одной недели получают разные ключи (3 Винни не
+      // мерджились). Нормализуем через weekStart() сначала.
+      const bk = bucketKey(weekStart(evDate), now).key
+      const key = `${ev.place_id}|${bk}`
       let g = reviewGroups.get(key)
       if (!g) {
         g = {
+          // ...place идёт ПЕРВЫМ, потом наши per-event override'ы. Иначе
+          // place.id (= число 242) затирал composite id — все визиты места
+          // имели один id → pickFeaturedId помечал все как featured.
+          ...place,
           _kind: 'place',
-          _date: new Date(ev.occurred_at),
+          _date: evDate,
           _attendeeIds: new Set(),
           _videos: [],
           _foodSum: 0, _serviceSum: 0, _vibeSum: 0, _ratingCount: 0,
           _bestComment: '',
-          id: `${ev.place_id}-${day}`,
+          _visitsCount: 0,
+          id: `${ev.place_id}-${bk}`,
           _placeId: ev.place_id,
-          ...place,
           // override: per-event-grouped поля. Видео и рейтинги — из событий,
           // не place-уровня. Иначе все визиты места показывали бы
           // одинаковую общую оценку и любой видео-флаг расширял всех.
@@ -163,6 +173,7 @@ export function useFeed() {
         }
         reviewGroups.set(key, g)
       }
+      g._visitsCount += 1
       for (const id of (ev.attendees || [])) g._attendeeIds.add(id)
       if (ev.video_url) g._videos.push(ev.video_url)
       if (ev.food_rating != null) {
@@ -171,14 +182,11 @@ export function useFeed() {
         g._vibeSum    += ev.vibe_rating    ?? 0
         g._ratingCount += 1
       }
-      // Q-layout фолбэк: ищем самый длинный коммент среди event'ов группы.
-      // Это всё ещё ОДИН визит (один день), но внутри него могут быть
-      // несколько отзывов от соавторов — берём самый информативный.
+      // Q-layout фолбэк: самый длинный/информативный коммент в group.
       const c = (ev.comment || '').trim()
       if (c && c.length > g._bestComment.length) g._bestComment = c
-      // _date: берём самое раннее событие дня — карточка датируется началом визита
-      const d = new Date(ev.occurred_at)
-      if (d < g._date) g._date = d
+      // _date: самое раннее событие недели — карточка датируется первым визитом.
+      if (evDate < g._date) g._date = evDate
     }
     for (const g of reviewGroups.values()) {
       g._attendees = [...g._attendeeIds]
@@ -194,9 +202,12 @@ export function useFeed() {
         g.review_count = g._ratingCount
       }
       g.created_at = g._date.toISOString()
-      // Per-visit Q-layout цитата. Если коммента нет — PhotoFreeCard
+      // Per-week Q-layout цитата. Если коммента нет — PhotoFreeCard
       // упадёт в T-layout, не на place-уровневую цитату.
       g.top_review_comment = g._bestComment || ''
+      // visitsCount > 1 → карточка показывает «×N раз за неделю» (см.
+      // ArtifactCard). 1 визит → ничего особенного, обычный полароид.
+      g.visits_count = g._visitsCount
       delete g._videos
       delete g._attendeeIds
       delete g._foodSum
@@ -204,6 +215,7 @@ export function useFeed() {
       delete g._vibeSum
       delete g._ratingCount
       delete g._bestComment
+      delete g._visitsCount
       out.push(g)
     }
 

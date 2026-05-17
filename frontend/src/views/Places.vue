@@ -80,7 +80,7 @@
         v-for="id in placesStore.filters.attended_by || []"
         :key="`att-${id}`"
         class="chip"
-        @click="toggleAttended(id); fetchFiltered()"
+        @click="removeAttended(id)"
       >
 {{ friendName(id) }} был · ×
 </button>
@@ -239,7 +239,7 @@
       <div class="offcanvas-body">
         <div class="mb-3">
           <label class="drawer-label">Город</label>
-          <select v-model="placesStore.filters.city" class="form-select">
+          <select v-model="draft.city" class="form-select">
             <option value="">все</option>
             <option v-for="city in cities" :key="city" :value="city">{{ city }}</option>
           </select>
@@ -247,8 +247,8 @@
         <div class="mb-3">
           <label class="drawer-label">Кухни</label>
           <MultiSelect
-            :modelValue="placesStore.filters.cuisine_type_ids"
-            @update:model-value="v => placesStore.filters.cuisine_type_ids = v"
+            :modelValue="draft.cuisine_type_ids"
+            @update:model-value="v => draft.cuisine_type_ids = v"
             :options="catalogs.cuisineTypes"
             placeholder="любые"
           />
@@ -256,15 +256,15 @@
         <div class="mb-3">
           <label class="drawer-label">Категории</label>
           <MultiSelect
-            :modelValue="placesStore.filters.category_ids"
-            @update:model-value="v => placesStore.filters.category_ids = v"
+            :modelValue="draft.category_ids"
+            @update:model-value="v => draft.category_ids = v"
             :options="catalogs.categories"
             placeholder="любые"
           />
         </div>
         <div class="mb-3">
           <label class="drawer-label">Сортировка</label>
-          <select :value="sortBase" @change="onSortChange" class="form-select">
+          <select :value="draftSortBase" @change="onDraftSortChange" class="form-select">
             <option value="">сначала новые</option>
             <option value="rating">по рейтингу ↓</option>
             <option value="rating_asc">по рейтингу ↑</option>
@@ -272,10 +272,10 @@
             <option value="rating_user">по оценке друга</option>
           </select>
           <select
-            v-if="sortBase === 'rating_user'"
-            v-model="ratingUserId"
+            v-if="draftSortBase === 'rating_user'"
+            v-model="draftRatingUserId"
             class="form-select mt-2"
-            @change="onRatingUserChange"
+            @change="onDraftRatingUserChange"
           >
             <option value="">— выбери друга —</option>
             <option v-for="u in friends" :key="u.id" :value="u.id">{{ u.username }}</option>
@@ -298,8 +298,8 @@
               :key="u.id"
               type="button"
               class="att-chip"
-              :class="{ on: placesStore.filters.attended_by.includes(u.id) }"
-              @click="toggleAttended(u.id)"
+              :class="{ on: (draft.attended_by || []).includes(u.id) }"
+              @click="toggleDraftAttended(u.id)"
             >
               <span
                 class="r-tag sb-author-tag"
@@ -318,14 +318,14 @@
           <label class="drawer-label">Когда</label>
           <div class="date-row">
             <input
-              v-model="placesStore.filters.visit_from"
+              v-model="draft.visit_from"
               type="date"
               class="form-control"
               aria-label="с"
             />
             <span class="date-sep">—</span>
             <input
-              v-model="placesStore.filters.visit_to"
+              v-model="draft.visit_to"
               type="date"
               class="form-control"
               aria-label="по"
@@ -337,8 +337,8 @@
               :key="p.key"
               type="button"
               class="preset-chip"
-              :class="{ on: activePreset === p.key }"
-              @click="applyDatePreset(p.key)"
+              :class="{ on: draftActivePreset === p.key }"
+              @click="applyDraftDatePreset(p.key)"
             >
 {{ p.label }}
 </button>
@@ -346,7 +346,7 @@
         </div>
         <div class="form-check form-switch mb-3">
           <input
-            v-model="placesStore.filters.is_gem"
+            v-model="draft.is_gem"
             class="form-check-input"
             type="checkbox"
             id="gemFilterMobile"
@@ -355,8 +355,8 @@
           <label class="form-check-label" for="gemFilterMobile">только&nbsp;жемчужины&nbsp;♦</label>
         </div>
         <div class="d-grid gap-2 mt-4 mb-3">
-          <button class="btn btn-apply" data-bs-dismiss="offcanvas" @click="fetchFiltered">применить</button>
-          <button class="btn btn-link reset-btn" @click="resetFilters">сбросить</button>
+          <button class="btn btn-apply" data-bs-dismiss="offcanvas" @click="applyDraft">применить</button>
+          <button class="btn btn-link reset-btn" @click="resetDraft">сбросить</button>
         </div>
       </div>
     </div>
@@ -404,37 +404,125 @@ const activeFilterCount = computed(() => {
   return n
 })
 
-// Q5 — sort распадается на «base» + опционально rating_user-id. Эти computed
-// держат UI в синке с filter.sort: если sort = 'rating_user:5', то sortBase
-// равно 'rating_user', а ratingUserId — '5'.
+// sortBase для applied filters — нужен, чтобы splitResults и reloadFriendVisits
+// смотрели на ПРИМЕНЁННОЕ значение (а не на draft внутри drawer).
 const sortBase = computed(() => {
   const s = placesStore.filters.sort || ''
   return s.startsWith('rating_user:') ? 'rating_user' : s
 })
-const ratingUserId = ref('')
-// Все фильтры внутри дровера ждут «применить» — consistent UX.
-// Раньше chip «Кто был» применялся сразу, а select sort — нет — пользователь
-// жаловался на несогласованность («только по людям так работает»).
-function onSortChange(e) {
-  const v = e.target.value
-  if (v === 'rating_user') {
-    placesStore.filters.sort = ratingUserId.value ? `rating_user:${ratingUserId.value}` : 'rating_user'
-  } else {
-    placesStore.filters.sort = v
-    ratingUserId.value = ''
-  }
-}
-function onRatingUserChange() {
-  if (ratingUserId.value) {
-    placesStore.filters.sort = `rating_user:${ratingUserId.value}`
-  }
-}
-// Чип «sort ×» в шапке результатов — наоборот, апплаит сразу: юзер уже
+const ratingUserId = computed(() => {
+  const s = placesStore.filters.sort || ''
+  return s.startsWith('rating_user:') ? s.slice('rating_user:'.length) : ''
+})
+// Чип «sort ×» в шапке результатов — апплаит сразу: юзер уже
 // в режиме результатов и явно хочет убрать фильтр.
 function clearSort() {
   placesStore.filters.sort = ''
-  ratingUserId.value = ''
   fetchFiltered()
+}
+
+// ---- Draft state для drawer ----
+// Drawer пишет в свой локальный draft, а не в общий placesStore.filters,
+// чтобы UI снаружи (чипы, find-results) не реагировал на промежуточные тапы.
+// Apply — копирует draft → store + fetchPlaces. Close без apply — draft
+// заполнится заново при следующем открытии (seedDraft на show.bs.offcanvas).
+const draft = ref(emptyDraft())
+const draftRatingUserId = ref('')
+function emptyDraft() {
+  return {
+    city: '',
+    cuisine_type_ids: [],
+    category_ids: [],
+    sort: '',
+    is_gem: false,
+    attended_by: [],
+    visit_from: '',
+    visit_to: '',
+  }
+}
+function seedDraft() {
+  const f = placesStore.filters
+  draft.value = {
+    city: f.city || '',
+    cuisine_type_ids: [...(f.cuisine_type_ids || [])],
+    category_ids: [...(f.category_ids || [])],
+    sort: f.sort || '',
+    is_gem: !!f.is_gem,
+    attended_by: [...(f.attended_by || [])],
+    visit_from: f.visit_from || '',
+    visit_to: f.visit_to || '',
+  }
+  draftRatingUserId.value = ratingUserId.value
+}
+const draftSortBase = computed(() => {
+  const s = draft.value.sort || ''
+  return s.startsWith('rating_user:') ? 'rating_user' : s
+})
+function onDraftSortChange(e) {
+  const v = e.target.value
+  if (v === 'rating_user') {
+    draft.value.sort = draftRatingUserId.value ? `rating_user:${draftRatingUserId.value}` : 'rating_user'
+  } else {
+    draft.value.sort = v
+    draftRatingUserId.value = ''
+  }
+}
+function onDraftRatingUserChange() {
+  if (draftRatingUserId.value) {
+    draft.value.sort = `rating_user:${draftRatingUserId.value}`
+  }
+}
+function toggleDraftAttended(id) {
+  const arr = draft.value.attended_by || []
+  draft.value.attended_by = arr.includes(id) ? arr.filter(x => x !== id) : [...arr, id]
+}
+function applyDraftDatePreset(key) {
+  const now = new Date()
+  if (key === 'this-year') {
+    draft.value.visit_from = `${now.getFullYear()}-01-01`
+    draft.value.visit_to   = `${now.getFullYear()}-12-31`
+  } else if (key === 'prev-year') {
+    const y = now.getFullYear() - 1
+    draft.value.visit_from = `${y}-01-01`
+    draft.value.visit_to   = `${y}-12-31`
+  } else if (key === 'last-30-days') {
+    const from = new Date(now)
+    from.setDate(from.getDate() - 30)
+    draft.value.visit_from = isoDate(from)
+    draft.value.visit_to   = isoDate(now)
+  }
+}
+const draftActivePreset = computed(() => {
+  const f = draft.value
+  if (!f.visit_from || !f.visit_to) return ''
+  const now = new Date()
+  const y = now.getFullYear()
+  if (f.visit_from === `${y}-01-01` && f.visit_to === `${y}-12-31`) return 'this-year'
+  if (f.visit_from === `${y - 1}-01-01` && f.visit_to === `${y - 1}-12-31`) return 'prev-year'
+  const to = new Date(f.visit_to)
+  const from = new Date(f.visit_from)
+  const dayMs = 86400000
+  if (Math.abs(now - to) < dayMs && Math.round((to - from) / dayMs) === 30) return 'last-30-days'
+  return ''
+})
+function applyDraft() {
+  const f = placesStore.filters
+  const d = draft.value
+  f.city = d.city
+  f.cuisine_type_ids = [...d.cuisine_type_ids]
+  f.category_ids = [...d.category_ids]
+  f.sort = d.sort
+  f.is_gem = d.is_gem
+  f.attended_by = [...d.attended_by]
+  f.visit_from = d.visit_from
+  f.visit_to = d.visit_to
+  fetchFiltered()
+}
+function resetDraft() {
+  // «Сбросить» внутри drawer — обнуляет ТОЛЬКО draft (без apply).
+  // Юзер сразу нажимает «применить» если хочет сбросить и в store.
+  draft.value = emptyDraft()
+  draftRatingUserId.value = ''
 }
 
 // R5-Q6 — при sort=rating_user:N подтягиваем список визитов друга,
@@ -491,13 +579,6 @@ const attendedVisible = computed(() => {
   if (!q) return friends.value
   return friends.value.filter(u => (u.username || '').toLowerCase().includes(q))
 })
-// Чип «Кто был» — ТОЛЬКО toggle state, apply по «применить» (consistent
-// с остальными контролами в дровере).
-function toggleAttended(id) {
-  const arr = placesStore.filters.attended_by || []
-  placesStore.filters.attended_by = arr.includes(id) ? arr.filter(x => x !== id) : [...arr, id]
-}
-
 // drawer-close: кнопка «применить» / ✕ имеют data-bs-dismiss="offcanvas"
 // и закрываются самим Bootstrap'ом. Дополнительная подстраховка от
 // застрявшего body.overflow=hidden — слушаем hidden.bs.offcanvas.
@@ -515,43 +596,13 @@ function friendName(id) {
 }
 
 // Q5 — preset-чипы для «когда». Конвертируются в visit_from / visit_to.
+// Сами presets применяются через draft (applyDraftDatePreset выше).
 const datePresets = [
   { key: 'this-year',    label: 'этот год' },
   { key: 'prev-year',    label: 'прошлый год' },
   { key: 'last-30-days', label: 'последние 30 дней' },
 ]
 function isoDate(d) { return d.toISOString().slice(0, 10) }
-function applyDatePreset(key) {
-  const now = new Date()
-  if (key === 'this-year') {
-    placesStore.filters.visit_from = `${now.getFullYear()}-01-01`
-    placesStore.filters.visit_to   = `${now.getFullYear()}-12-31`
-  } else if (key === 'prev-year') {
-    const y = now.getFullYear() - 1
-    placesStore.filters.visit_from = `${y}-01-01`
-    placesStore.filters.visit_to   = `${y}-12-31`
-  } else if (key === 'last-30-days') {
-    const from = new Date(now)
-    from.setDate(from.getDate() - 30)
-    placesStore.filters.visit_from = isoDate(from)
-    placesStore.filters.visit_to   = isoDate(now)
-  }
-  // Apply по «применить» — consistent с остальными контролами.
-}
-const activePreset = computed(() => {
-  const f = placesStore.filters
-  if (!f.visit_from || !f.visit_to) return ''
-  const now = new Date()
-  const y = now.getFullYear()
-  if (f.visit_from === `${y}-01-01` && f.visit_to === `${y}-12-31`) return 'this-year'
-  if (f.visit_from === `${y - 1}-01-01` && f.visit_to === `${y - 1}-12-31`) return 'prev-year'
-  // last-30-days меряется по разности в днях между to и сегодня
-  const to = new Date(f.visit_to)
-  const from = new Date(f.visit_from)
-  const dayMs = 86400000
-  if (Math.abs(now - to) < dayMs && Math.round((to - from) / dayMs) === 30) return 'last-30-days'
-  return ''
-})
 const dateRangeChip = computed(() => {
   const f = placesStore.filters
   if (!f.visit_from && !f.visit_to) return ''
@@ -626,6 +677,10 @@ function removeCategory(id) {
   placesStore.filters.category_ids = (placesStore.filters.category_ids || []).filter((x) => x !== id)
   fetchFiltered()
 }
+function removeAttended(id) {
+  placesStore.filters.attended_by = (placesStore.filters.attended_by || []).filter((x) => x !== id)
+  fetchFiltered()
+}
 
 function clearSearch() {
   placesStore.filters.search = ''
@@ -667,6 +722,7 @@ async function rollDice() {
   router.push(`/places/${p.id}`)
 }
 
+// «сброс» в chip-row снаружи drawer — обнуляет applied state и сразу применяет.
 function resetFilters() {
   placesStore.filters.search = ''
   placesStore.filters.city = ''
@@ -678,7 +734,6 @@ function resetFilters() {
   placesStore.filters.attended_by = []
   placesStore.filters.visit_from = ''
   placesStore.filters.visit_to = ''
-  ratingUserId.value = ''
   fetchFiltered()
 }
 
@@ -694,9 +749,6 @@ function loadFiltersFromURL() {
   placesStore.filters.attended_by = q.attended_by ? q.attended_by.split(',').map(Number) : []
   placesStore.filters.visit_from = q.visit_from || ''
   placesStore.filters.visit_to = q.visit_to || ''
-  if (placesStore.filters.sort?.startsWith('rating_user:')) {
-    ratingUserId.value = placesStore.filters.sort.slice('rating_user:'.length)
-  }
   if (q.page) placesStore.page = parseInt(q.page) || 1
 }
 
@@ -754,9 +806,13 @@ onMounted(async () => {
   await fetchCities()
   await fetchFriends()
   await placesStore.fetchPlaces()
-  // Подстраховка: ловим закрытие дровера и форсим разлоченный body.
+  // Drawer: на каждый show seed'им draft из applied filters, на hidden чистим
+  // body-lock. Apply сам копирует draft → store + fetchPlaces.
   const drawer = document.getElementById('placesFilterDrawer')
-  if (drawer) drawer.addEventListener('hidden.bs.offcanvas', onDrawerHidden)
+  if (drawer) {
+    drawer.addEventListener('show.bs.offcanvas', seedDraft)
+    drawer.addEventListener('hidden.bs.offcanvas', onDrawerHidden)
+  }
 })
 </script>
 
@@ -970,7 +1026,10 @@ onMounted(async () => {
   display: flex;
   flex-direction: column;
   align-items: center;
-  width: 130px;
+  // Полароид внутри = 118px + padding 10/10/38 = 138px. С tilt (±1°..±3°)
+  // визуальный bounding box ≈ 148-152px. Контейнер должен быть шире,
+  // иначе фото визуально вылезает за края (видно в horizontal-scroll полке).
+  width: 156px;
 
   .gem-corner {
     position: absolute;
