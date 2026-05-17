@@ -148,16 +148,9 @@
       </div>
     </template>
 
-    <!-- C1 — soft-CTA внизу Доски, только в onboarding-режиме -->
-    <section v-if="onboarding" class="onboarding-cta">
-      <div class="oc-hint">первое прикнопить —</div>
-      <router-link
-        :to="{ path: '/places/new', query: { intent: 'visit' } }"
-        class="oc-button"
-      >
-        + новое место
-      </router-link>
-    </section>
+    <!-- D5 — onboarding-CTA внизу убран. Один призыв (баннер сверху) сильнее
+         двух; на пустой неделе уже виден большой PinButton «добавить» — этого
+         достаточно. См. R6 D5. -->
 
     <AddArtifactSheet v-model:open="openSheet" @pick="onPick" />
     <NoteSheet v-model:open="noteFormOpen" @submit="onSubmitNote" />
@@ -430,33 +423,4 @@ onMounted(() => {
   margin-top: 4px;
 }
 
-.onboarding-cta {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 10px;
-  padding: 22px 18px 28px;
-}
-.oc-hint {
-  font-family: var(--sb-hand);
-  font-size: 17px;
-  color: var(--sb-ink-mute);
-}
-.oc-button {
-  display: inline-flex;
-  align-items: center;
-  padding: 12px 22px;
-  background: var(--sb-terracotta);
-  color: var(--sb-on-accent);
-  border-radius: 999px;
-  font-family: var(--sb-serif);
-  font-style: italic;
-  font-size: 16px;
-  text-decoration: none;
-  box-shadow:
-    0 1px 1px rgba(40, 30, 20, 0.1),
-    0 4px 10px rgba(40, 30, 20, 0.15);
-  transition: transform 200ms ease;
-  &:hover { transform: translateY(-1px); }
-}
 </style>
