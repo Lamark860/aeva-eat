@@ -365,6 +365,7 @@
 
 <script setup>
 import { onMounted, ref, computed, watch } from 'vue'
+import { Offcanvas } from 'bootstrap'
 import { useRoute, useRouter } from 'vue-router'
 import { usePlacesStore } from '../stores/places'
 import { useCatalogsStore } from '../stores/catalogs'
@@ -412,21 +413,29 @@ const sortBase = computed(() => {
   return s.startsWith('rating_user:') ? 'rating_user' : s
 })
 const ratingUserId = ref('')
-// Внутри дровера sort/rating-user меняют ТОЛЬКО state, не дёргают
-// fetch — иначе результаты прыгают пока юзер ещё крутит селект.
-// Apply случается по кнопке «применить» внизу дровера.
+// Sort — quick action: apply + close drawer.
+// Исключение — выбор «по оценке друга» без id: ждём вторую селекцию
+// (по конкретному другу), чтобы не дёргать запрос с неполным sort'ом.
 function onSortChange(e) {
   const v = e.target.value
   if (v === 'rating_user') {
-    placesStore.filters.sort = ratingUserId.value ? `rating_user:${ratingUserId.value}` : 'rating_user'
+    if (!ratingUserId.value) {
+      placesStore.filters.sort = 'rating_user'
+      return  // ждём выбора друга
+    }
+    placesStore.filters.sort = `rating_user:${ratingUserId.value}`
   } else {
     placesStore.filters.sort = v
     ratingUserId.value = ''
   }
+  fetchFiltered()
+  closeDrawer()
 }
 function onRatingUserChange() {
   if (ratingUserId.value) {
     placesStore.filters.sort = `rating_user:${ratingUserId.value}`
+    fetchFiltered()
+    closeDrawer()
   }
 }
 // Чип «sort ×» в шапке результатов — наоборот, апплаит сразу: юзер уже
@@ -491,9 +500,33 @@ const attendedVisible = computed(() => {
   if (!q) return friends.value
   return friends.value.filter(u => (u.username || '').toLowerCase().includes(q))
 })
+// Чип «Кто был» — quick action: применяем сразу и закрываем дровер,
+// иначе UX-конфуз: чип визуально включился, но результаты не дёрнулись,
+// а Bootstrap всё ещё держит body-scroll lock.
 function toggleAttended(id) {
   const arr = placesStore.filters.attended_by || []
   placesStore.filters.attended_by = arr.includes(id) ? arr.filter(x => x !== id) : [...arr, id]
+  fetchFiltered()
+  closeDrawer()
+}
+
+function closeDrawer() {
+  // Bootstrap.Offcanvas API даёт race-condition при hide() сразу после
+  // открытия — body остаётся залочен на overflow:hidden. Кликаем по
+  // data-bs-dismiss-кнопке — это симулирует «юзер закрыл», Bootstrap
+  // отрабатывает свой обычный hide-flow корректно.
+  const el = document.getElementById('placesFilterDrawer')
+  const dismissBtn = el?.querySelector('[data-bs-dismiss="offcanvas"]')
+  if (dismissBtn) dismissBtn.click()
+  // Подстраховка через 350мс (Bootstrap-анимация ~300мс): если что-то
+  // зависло — снимаем backdrop и body-lock вручную.
+  setTimeout(() => {
+    if (!document.querySelector('.offcanvas.show')) {
+      document.querySelectorAll('.offcanvas-backdrop').forEach(b => b.remove())
+      document.body.style.overflow = ''
+      document.body.style.paddingRight = ''
+    }
+  }, 350)
 }
 function friendName(id) {
   return friends.value.find(u => u.id === id)?.username || ''
@@ -521,7 +554,9 @@ function applyDatePreset(key) {
     placesStore.filters.visit_from = isoDate(from)
     placesStore.filters.visit_to   = isoDate(now)
   }
-  // Date-preset внутри дровера — не апплаит, ждёт «применить».
+  // Date-preset — quick action, как chip «Кто был».
+  fetchFiltered()
+  closeDrawer()
 }
 const activePreset = computed(() => {
   const f = placesStore.filters

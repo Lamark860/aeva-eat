@@ -81,7 +81,11 @@ const dateLabel = computed(() => {
   if (!props.note.created_at) return ''
   const d = new Date(props.note.created_at)
   if (Number.isNaN(d.getTime())) return ''
-  return d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })
+  const dateStr = d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })
+  const hh = d.getHours()
+  const mm = d.getMinutes()
+  if (hh === 0 && mm === 0) return dateStr
+  return `${dateStr} ${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`
 })
 </script>
 

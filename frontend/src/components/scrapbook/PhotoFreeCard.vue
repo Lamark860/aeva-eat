@@ -51,8 +51,11 @@
         :service="place.avg_service"
         :vibe="place.avg_vibe"
       />
-      <div v-if="visitCaption" class="pfc-cap">{{ visitCaption }}</div>
     </template>
+
+    <!-- День и час визита — общий для всех трёх layout'ов, чтобы было видно
+         «когда были» независимо от того, есть фото/цитата/жемчужина. -->
+    <div v-if="visitCaption" class="pfc-cap">{{ visitCaption }}</div>
 
     <div v-if="reviewers.length" class="pfc-people">
       <span
