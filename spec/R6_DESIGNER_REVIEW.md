@@ -267,6 +267,26 @@ if (total > 0 && n / total < LOVE_MIN_SHARE) return ''
 
 ---
 
+## R6.8 — R5-Q4/Q5/Q6 мелочи (2026-05-17)
+
+**Q4 — мягкий tilt на wishlist.** В `Home.vue#cellTilt` добавлен пул `softTilts = ['sb-t-l1', 'sb-t-r1', 'sb-t-l2', 'sb-t-r2']` для `item._kind === 'wishlist'`. План не получает агрессивных ±3°.
+
+**Q5 — «тапни» fallback на video.** В `ArtifactCard.vue#forcePoster` после seek на 0.1s ставится `setTimeout` 500мс: если `currentTime` остался 0 — добавляется CSS-класс `posterless` на `.art-kruzhok-layer`, и рукописный плейсхолдер «тапни» появляется поверх тёмной подложки. Скрывается при `.playing`.
+
+**Q6 — разделитель «не пробовал(а)».** В `Places.vue` при `sort=rating_user:N`:
+- параллельно с `/api/places` грузим `/users/N/places` → `Set` placeId'ов и `/users/N` → display_name + гендер-эвристика по `-а/-я`
+- `splitResults` computed: разбивает `placesStore.places` на «оценённые этим другом» и «остальные»
+- template цикл рендерит маркер `{_divider: true, _friendName, _friendFem}` между группами как `<div class="rating-user-divider">… а вот эти Аня ещё не пробовала</div>`
+- Если на странице все места либо visited, либо все non-visited — fallback на плоский список без разделителя
+
+**Контроль:** `screenshots/mobile-04c-q6-divider-crop.png` — sort=rating_user:3 (charlie). Видны места charlie сверху (Древняя Бухара, Корчма млин), плашка-разделитель «… а вот эти charlie ещё не пробовал», места без него (Мясной гуру, Esmee).
+
+**Что осталось от R6:**
+- D1 рефактор ArtifactCard, D2/D3/D4 структурные.
+- Сидинг 25-30 разнообразных fake-данных — единственный блокер для показа кругу.
+
+---
+
 ## A. Критическое — скрапбук без фото перестаёт быть скрапбуком
 
 **Это приоритет 0. Пока не починим — на доске пустые клетки, и приложение читается как сырое. Можно сделать всё остальное идеально, но если 90% полароидов остаются пустыми — скрапбук-метафора не работает, и весь концепт-арт зря.**

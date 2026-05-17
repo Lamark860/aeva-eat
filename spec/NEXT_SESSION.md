@@ -82,6 +82,9 @@ node shot-v3-boards.mjs                          # 6 артбордов v3
 - ✅ **B1 — Город как путеводитель.** `CityPage.vue` переделан по эталону `v3/02-city-guide.png`: серифа-имя + рукописная meta-строка `N мест · M жемчужин · из круга K`, секция «Жемчужины {Город}» горизонтальным shelf из 3 крупных полароидов с tape (наклоны −3°/+2°/−1.5°), бумажная плашка «ЦИТАТА ОТ КРУГА» с самым длинным `top_review_comment` мест города, заголовок «Все N» и компактный список. Мини-карта города пока опущена (требует Yandex bootstrap фильтра).
 - ✅ **B2 — Жемчужины-сокровищница.** `GemsHub.vue` переделан по эталону `v3/03-gems-hub.png`: «Жемчужины» крупно с ромбом + подзаголовок `N в M городах`, секция **«САМАЯ ПЕРВАЯ»** с крупным полароидом и историей `username · дата` + `подтвердили: ...`, города чипами (`<Stamp ink> + count + ◆`), ряд аватарок «Кто отмечал», 2-колоночная сетка «Все жемчужины» через `ArtifactCard` (для безфотных — `PhotoFreeCard` G-layout).
 - ✅ **B8 — Person page reduction.** Раньше `lamark` (144 места) рендерил **~32000px**. Сейчас **3457px** — в ~10 раз короче. Города — чипами вместо вертикального списка (`КАЗАНЬ 56 · НИЖНИЙ НОВГОРОД 55 · ИЖЕВСК 33`). Жемчужины — 2-колоночная сетка через ArtifactCard. Визиты — лимит 6 по умолчанию + кнопка «↓ ещё N» (раскрывает по 12 за клик). Раньше все 144 рендерились без пагинации.
+- ✅ **R5-Q4 — мягкий tilt на wishlist.** В `Home.vue#cellTilt`: для `_kind === 'wishlist'` используется отдельный пул `softTilts = [l1, r1, l2, r2]` — без агрессивных ±3°. План концептуально не «живое впечатление», ему лишний наклон ни к чему.
+- ✅ **R5-Q5 — «тапни» fallback на video kruzhok.** В `ArtifactCard.vue#forcePoster` после seek на 0.1s ставится setTimeout 500мс: если `currentTime` всё ещё 0 — добавляется класс `posterless` на `.art-kruzhok-layer`. CSS показывает рукописный плейсхолдер «тапни» поверх тёмной подложки. Скрывается при `.playing`.
+- ✅ **R5-Q6 — разделитель «не пробовал(а)».** В `Places.vue` при `sort=rating_user:N` параллельно загружаются `/users/N/places` → `Set` placeId'ов. `splitResults` делит `placesStore.places` на «оценённые другом» и «остальные»; между ними вставляется маркер `{ _divider: true, _friendName, _friendFem }`. Template рендерит плашку «… а вот эти Аня ещё не пробовала» (или «пробовал»). Гендер — эвристикой по `-а/-я`.
 - 📸 Контроль: `screenshots/mobile-09b-person-lamark-top.png` (lamark viewport), `screenshots/mobile-09-person.png` (charlie — 4 места, всё видно), `screenshots/mobile-07b-gems-top.png` (Gems Hub), `screenshots/mobile-08b-city-izhevsk.png` (Город), `screenshots/mobile-10b-place-header.png` (шапка), `screenshots/mobile-06b-profile-header.png` (профиль), `screenshots/mobile-14b-share.png` (share), `screenshots/mobile-03b-board-expanded.png` (доска).
 
 ## Что делать в первую очередь (следующий раунд)
@@ -89,9 +92,8 @@ node shot-v3-boards.mjs                          # 6 артбордов v3
 В приоритетном порядке (полный список — `R6_DESIGNER_REVIEW.md` → Приоритеты):
 
 1. **Сидинг 25–30 fake мест с разнообразием** — без этого CityPage Казани (122 места, 0 фото и 0 цитат) выглядит пусто на скринах.
-2. **R5-Q4/Q5/Q6** — мелочи: tilt на wishlist, «тапни» fallback для video, разделитель «не пробовала».
-3. **Рефактор `ArtifactCard.vue` (D1).** Разнести на `ArtifactPolaroid` / `PhotoFreeCard` / `KruzhokStack` + тонкий роутер.
-4. **D2-D4 структурные** — priority full-width (gem > video > первый), убрать `grid-auto-flow:dense` или закрепить композицию, kruzhok-miss телеметрия.
+2. **Рефактор `ArtifactCard.vue` (D1).** Разнести на `ArtifactPolaroid` / `PhotoFreeCard` / `KruzhokStack` + тонкий роутер.
+3. **D2-D4 структурные** — priority full-width (gem > video > первый), убрать `grid-auto-flow:dense` или закрепить композицию, kruzhok-miss телеметрия.
 
 > ⚠️ Заметка о P0: оригинальный план «SQL COALESCE не работает» оказался неверным. SQL работает; проблема была в данных. Если у будущей сессии возникнет такая же гипотеза — проверять данные SQL'ом до правки кода. См. `R6_DESIGNER_REVIEW.md` секция R6.1.
 

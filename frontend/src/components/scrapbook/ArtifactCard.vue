@@ -39,6 +39,7 @@
               @ended="onVideoEnded"
             ></video>
             <span class="art-kruzhok-play" aria-hidden="true"></span>
+            <span class="art-kruzhok-hint" aria-hidden="true">тапни</span>
           </span>
           <span v-if="extraVideos > 0" class="art-kruzhok-extra">+{{ extraVideos }}</span>
         </div>
@@ -115,6 +116,7 @@
               @ended="onVideoEnded"
             ></video>
             <span class="art-kruzhok-play" aria-hidden="true"></span>
+            <span class="art-kruzhok-hint" aria-hidden="true">тапни</span>
           </span>
           <span v-if="extraVideos > 0" class="art-kruzhok-extra">+{{ extraVideos }}</span>
         </div>
@@ -226,10 +228,18 @@ function kruzhokLayerStyle(i) {
 // видим прозрачный <video>. Принудительный seek на 0.1s заставляет браузер
 // декодировать и нарисовать кадр. Срабатывает один раз на loadedmetadata,
 // после чего отписываемся (если currentTime уже двинулся — кадр нарисован).
+// R5-Q5 — если за 500мс currentTime всё ещё 0 (браузер заснул на poster),
+// показываем текстовый плейсхолдер «тапни, чтобы посмотреть» на layer'е.
 function forcePoster(ev) {
   const v = ev.target
   if (!v || v.currentTime > 0) return
   try { v.currentTime = 0.1 } catch (_) { /* fail-soft — не критично */ }
+  setTimeout(() => {
+    if (!v.isConnected) return
+    if (v.currentTime > 0) return
+    const layer = v.closest('.art-kruzhok-layer')
+    if (layer) layer.classList.add('posterless')
+  }, 500)
 }
 
 // Тап по кружочку играет/паузит видео inline вместо перехода на отзыв.
@@ -517,6 +527,29 @@ const metaLine = computed(() => {
   filter: drop-shadow(0 1px 0.5px rgba(0, 0, 0, 0.25));
 }
 .art-kruzhok-layer.playing .art-kruzhok-play { opacity: 0; }
+.art-kruzhok-layer.playing .art-kruzhok-hint { opacity: 0; }
+
+/* R5-Q5 — текстовый плейсхолдер «тапни», если браузер за 500мс не нарисовал
+   первый кадр видео. Скрыт по умолчанию; показывается через класс .posterless,
+   который ставит forcePoster по таймауту. */
+.art-kruzhok-hint {
+  position: absolute;
+  inset: 0;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--sb-hand);
+  font-size: 14px;
+  color: var(--sb-paper-card);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+  pointer-events: none;
+  z-index: 3;
+}
+.art-kruzhok-layer.posterless {
+  background: oklch(0.35 0.04 60); /* тёмная подложка чтобы текст читался */
+}
+.art-kruzhok-layer.posterless .art-kruzhok-hint { display: flex; }
+.art-kruzhok-layer.posterless .art-kruzhok-play { opacity: 0; }
 .art-kruzhok-extra {
   position: absolute;
   bottom: -14px;

@@ -242,13 +242,18 @@ function onArchiveLeave(el, done) {
 const currentVisible = computed(() => (buckets.value.current?.items || []).slice(0, visibleCount.value))
 
 const tilts = ['sb-t-l3', 'sb-t-r1', 'sb-t-l2', 'sb-t-r2', 'sb-t-r3', 'sb-t-l1']
+// R5-Q4 — wishlist'у даём только мягкие tilt'ы (±1° или ±2°). Резкий ±3°
+// на «плане» читается агрессивно, как живое впечатление, чего wishlist
+// концептуально не несёт.
+const softTilts = ['sb-t-l1', 'sb-t-r1', 'sb-t-l2', 'sb-t-r2']
 function cellTilt(item) {
   // id может быть числом (place) или строкой `note-N` / `wish-U-P`. Делаем
   // стабильный хэш строкового представления.
   const s = String(item.id ?? '0')
   let h = 0
   for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0
-  return tilts[Math.abs(h) % tilts.length]
+  const pool = item._kind === 'wishlist' ? softTilts : tilts
+  return pool[Math.abs(h) % pool.length]
 }
 
 // A1 — full-width «звезда» раз в 5+ карточек (NEXT.md §A1). Только для

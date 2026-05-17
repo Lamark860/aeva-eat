@@ -195,7 +195,14 @@
         </div>
       </div>
       <div v-else class="results-list">
-        <ResultCard v-for="place in placesStore.places" :key="place.id" :place="place" />
+        <!-- R5-Q6 — при sort=rating_user:N делим список на «оценённое другом»
+             и «остальное», между ними рукописная плашка-разделитель. -->
+        <template v-for="(item, i) in splitResults" :key="`r-${i}`">
+          <div v-if="item._divider" class="rating-user-divider">
+            <span>… а вот эти {{ item._friendName }} ещё не пробовал{{ item._friendFem ? 'а' : '' }}</span>
+          </div>
+          <ResultCard v-else :place="item" />
+        </template>
       </div>
 
       <nav v-if="totalPages > 1" class="find-pagination">
@@ -357,7 +364,7 @@
 </template>
 
 <script setup>
-import { onMounted, ref, computed } from 'vue'
+import { onMounted, ref, computed, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { usePlacesStore } from '../stores/places'
 import { useCatalogsStore } from '../stores/catalogs'
@@ -426,6 +433,53 @@ function clearSort() {
   ratingUserId.value = ''
   fetchFiltered()
 }
+
+// R5-Q6 — при sort=rating_user:N подтягиваем список визитов друга,
+// чтобы знать какие места он пробовал. Set placeId'ов → разделитель в UI.
+const friendVisitedIds = ref(new Set())
+const friendDisplayName = ref('')
+const friendIsFem = ref(false)
+async function reloadFriendVisits() {
+  const id = ratingUserId.value
+  if (!id || sortBase.value !== 'rating_user') {
+    friendVisitedIds.value = new Set()
+    friendDisplayName.value = ''
+    return
+  }
+  try {
+    const [places, profile] = await Promise.all([
+      http.get(`/users/${id}/places`),
+      http.get(`/users/${id}`),
+    ])
+    friendVisitedIds.value = new Set((places.data || []).map(p => p.id))
+    const name = profile.data?.display_name || profile.data?.username || ''
+    friendDisplayName.value = name
+    friendIsFem.value = /[ая]$/i.test(name)
+  } catch {
+    friendVisitedIds.value = new Set()
+  }
+}
+watch(() => placesStore.filters.sort, reloadFriendVisits, { immediate: true })
+
+// При sort=rating_user отдаём массив с _divider-маркером между визитами друга
+// и остальными. Для других сортировок — обычный плоский список.
+const splitResults = computed(() => {
+  if (sortBase.value !== 'rating_user' || !ratingUserId.value || !friendVisitedIds.value.size) {
+    return placesStore.places
+  }
+  const visited = []
+  const rest = []
+  for (const p of placesStore.places) {
+    if (friendVisitedIds.value.has(p.id)) visited.push(p)
+    else rest.push(p)
+  }
+  if (visited.length === 0 || rest.length === 0) return placesStore.places
+  return [
+    ...visited,
+    { _divider: true, _friendName: friendDisplayName.value, _friendFem: friendIsFem.value },
+    ...rest,
+  ]
+})
 
 // Q5 — «кто был» multi-select.
 const attendedSearch = ref('')
@@ -1010,6 +1064,28 @@ onMounted(async () => {
   display: flex;
   flex-direction: column;
   gap: 14px;
+}
+
+/* R5-Q6 — рукописная плашка-разделитель между «оценённое другом» и
+   «остальное» при sort=rating_user. Чтобы не было ощущения, что нижний
+   блок продолжает шкалу. */
+.rating-user-divider {
+  text-align: center;
+  padding: 8px 16px 4px;
+  font-family: var(--sb-hand);
+  font-size: 17px;
+  color: var(--sb-ink-mute);
+  position: relative;
+}
+.rating-user-divider::before,
+.rating-user-divider::after {
+  content: '';
+  display: inline-block;
+  width: 28px;
+  height: 1px;
+  background: rgba(40, 30, 20, 0.18);
+  vertical-align: middle;
+  margin: 0 8px;
 }
 
 .find-pagination {
