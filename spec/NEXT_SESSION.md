@@ -80,18 +80,18 @@ node shot-v3-boards.mjs                          # 6 артбордов v3
 - ✅ **Bugfix: фото-overflow на featured карточках.** `.sb-polaroid` без `box-sizing: border-box` + слои PolaroidStack с `inset:0 + width:100%` + translate ±6% уносили featured Мясной гуру за грид-ячейку (374 при ширине 363, body scroll-width 408 vs 390). Fix: `box-sizing: border-box`, `inset:8%` на layer, убран paddingInline rootStyle.
 - ✅ **D5 — `.onboarding-cta` снизу Доски удалён.** Один призыв (баннер сверху + PinButton) сильнее двух.
 - ✅ **B1 — Город как путеводитель.** `CityPage.vue` переделан по эталону `v3/02-city-guide.png`: серифа-имя + рукописная meta-строка `N мест · M жемчужин · из круга K`, секция «Жемчужины {Город}» горизонтальным shelf из 3 крупных полароидов с tape (наклоны −3°/+2°/−1.5°), бумажная плашка «ЦИТАТА ОТ КРУГА» с самым длинным `top_review_comment` мест города, заголовок «Все N» и компактный список. Мини-карта города пока опущена (требует Yandex bootstrap фильтра).
-- 📸 Контроль: `screenshots/mobile-03b-board-expanded.png` (доска без overflow), `screenshots/mobile-10b-place-header.png` (шапка), `screenshots/mobile-06b-profile-header.png` (профиль), `screenshots/mobile-14b-share.png` (share), `screenshots/mobile-08b-city-izhevsk.png` (Город на Ижевске — есть и жемчужины с фото, и цитата).
+- ✅ **B2 — Жемчужины-сокровищница.** `GemsHub.vue` переделан по эталону `v3/03-gems-hub.png`: «Жемчужины» крупно с ромбом + подзаголовок `N в M городах`, секция **«САМАЯ ПЕРВАЯ»** с крупным полароидом и историей `username · дата` + `подтвердили: ...`, города чипами (`<Stamp ink> + count + ◆`), ряд аватарок «Кто отмечал», 2-колоночная сетка «Все жемчужины» через `ArtifactCard` (для безфотных — `PhotoFreeCard` G-layout).
+- 📸 Контроль: `screenshots/mobile-03b-board-expanded.png` (доска без overflow), `screenshots/mobile-10b-place-header.png` (шапка), `screenshots/mobile-06b-profile-header.png` (профиль), `screenshots/mobile-14b-share.png` (share), `screenshots/mobile-08b-city-izhevsk.png` (Город), `screenshots/mobile-07b-gems-top.png` (Gems Hub viewport).
 
 ## Что делать в первую очередь (следующий раунд)
 
 В приоритетном порядке (полный список — `R6_DESIGNER_REVIEW.md` → Приоритеты):
 
-1. **Жемчужины-сокровищница (B2).** [`v3/03-gems-hub.png`](./screenshots/v3/03-gems-hub.png). Featured-полароид первой найденной + штампы городов чипами + аватарки кураторов + развёрнутый список.
-2. **Сидинг 25–30 fake мест с разнообразием** — без этого CityPage Казани (122 места, 0 фото и 0 цитат) и Gems Hub выглядят пустыми на скринах.
-3. **Person page reduction-strategy (B8).** Группировать lamark'овские 144 места по городам и жемчужинам, не лентой.
-4. **R5-Q4/Q5/Q6** — мелочи.
-5. **Рефактор `ArtifactCard.vue` (D1).**
-6. **D2-D4 структурные** — priority full-width, dense-flow, kruzhok-miss телеметрия.
+1. **Сидинг 25–30 fake мест с разнообразием** — без этого CityPage Казани (122 места, 0 фото и 0 цитат) выглядит пусто на скринах.
+2. **Person page reduction-strategy (B8).** Группировать lamark'овские 144 места по городам и жемчужинам, не лентой.
+3. **R5-Q4/Q5/Q6** — мелочи: tilt на wishlist, «тапни» fallback для video, разделитель «не пробовала».
+4. **Рефактор `ArtifactCard.vue` (D1).**
+5. **D2-D4 структурные** — priority full-width, dense-flow, kruzhok-miss телеметрия.
 
 > ⚠️ Заметка о P0: оригинальный план «SQL COALESCE не работает» оказался неверным. SQL работает; проблема была в данных. Если у будущей сессии возникнет такая же гипотеза — проверять данные SQL'ом до правки кода. См. `R6_DESIGNER_REVIEW.md` секция R6.1.
 

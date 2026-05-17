@@ -6,32 +6,63 @@
       </div>
 
       <div class="title-row">
-        <GemBadge :size="36" />
-        <h1 class="title">Жемчужины круга</h1>
+        <GemBadge :size="28" />
+        <h1 class="title">Жемчужины</h1>
       </div>
-      <div class="sub">{{ totalLabel }}</div>
+      <div v-if="!loading" class="sub">{{ subLabel }}</div>
     </header>
 
     <section v-if="loading" class="sb-empty">листаем заметки…</section>
 
     <template v-else>
+      <!-- B2 — САМАЯ ПЕРВАЯ найденная жемчужина: крупный полароид + история
+           «Имя нашла дата». Эталон v3/03-gems-hub.png. -->
+      <section v-if="firstGem" class="first-gem">
+        <div class="cap-tag">самая первая</div>
+        <router-link :to="`/places/${firstGem.id}`" class="first-card">
+          <div class="first-photo">
+            <Polaroid
+              :src="coverOf(firstGem)"
+              :width="140"
+              :height="140"
+              :caption="`${firstGem.name} · ${firstGem.city || ''}`"
+              :gem="true"
+              :placeholder="placeholderFor(firstGem)"
+            >
+              <Tape :variant="tapeFor(firstGem)" :style="tapeStyleFor(firstGem)" />
+              <span class="gem-corner"><GemBadge :size="18" /></span>
+            </Polaroid>
+          </div>
+          <div class="first-body">
+            <div class="first-name">{{ firstGem.name }}</div>
+            <div class="first-meta">{{ firstGem.city }}{{ firstGem.cuisine_type ? ` · ${firstGem.cuisine_type}` : '' }}</div>
+            <div v-if="firstGemHistory" class="first-history">
+              <div class="hist-line">{{ firstGemHistory.first }}</div>
+              <div v-if="firstGemHistory.confirmedExtra" class="hist-line dim">{{ firstGemHistory.confirmedExtra }}</div>
+            </div>
+          </div>
+        </router-link>
+      </section>
+
+      <!-- По городам: чипы (НЕ вертикальный список). -->
       <div v-if="hub.by_city?.length" class="sb-section-head" style="padding: 0 18px 8px">
         <h2>По городам</h2>
       </div>
-      <div v-if="hub.by_city?.length" class="city-list">
+      <div v-if="hub.by_city?.length" class="city-chips">
         <router-link
           v-for="c in hub.by_city"
           :key="c.city"
           :to="`/cities/${encodeURIComponent(c.city)}`"
-          class="city-item"
+          class="city-chip"
         >
-          <span class="city-name">{{ c.city }}</span>
-          <Stamp kind="gem">{{ c.gem_count }}</Stamp>
+          <Stamp kind="ink">{{ c.city }}</Stamp>
+          <span class="chip-count">{{ c.gem_count }}<span class="diamond">◆</span></span>
         </router-link>
       </div>
 
+      <!-- Кто отмечал: ряд аватарок с инициалами/фото -->
       <div v-if="hub.by_user?.length" class="sb-section-head" style="padding: 18px 18px 8px">
-        <h2>Кто отметил</h2>
+        <h2>Кто отмечал</h2>
       </div>
       <div v-if="hub.by_user?.length" class="people-row">
         <router-link
@@ -49,18 +80,22 @@
             <template v-else>{{ (u.username || '?').slice(0,1).toUpperCase() }}</template>
           </span>
           <span class="person-name">{{ u.username }}</span>
-          <span class="person-count">{{ u.count }}</span>
+          <span class="person-count">{{ u.count }}<span class="diamond">◆</span></span>
         </router-link>
       </div>
 
+      <!-- Все жемчужины: крупные карточки через ArtifactCard.
+           Для безфотных автоматом включится PhotoFreeCard (G-layout). -->
       <div class="sb-section-head" style="padding: 18px 18px 8px">
         <h2>Все жемчужины</h2>
       </div>
-      <div v-if="(hub.places || []).length === 0" class="sb-empty">
+      <div v-if="restGems.length === 0" class="sb-empty">
         пока ничего не отмечали как жемчужину
       </div>
-      <div v-else class="shelf">
-        <ResultCard v-for="p in hub.places" :key="p.id" :place="p" />
+      <div v-else class="all-grid">
+        <div v-for="p in restGems" :key="p.id" class="all-cell" :class="cellTiltFor(p)">
+          <ArtifactCard :place="p" />
+        </div>
       </div>
     </template>
   </div>
@@ -69,7 +104,9 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import http from '../api/http'
-import ResultCard from '../components/scrapbook/ResultCard.vue'
+import ArtifactCard from '../components/scrapbook/ArtifactCard.vue'
+import Polaroid from '../components/scrapbook/Polaroid.vue'
+import Tape from '../components/scrapbook/Tape.vue'
 import Stamp from '../components/scrapbook/Stamp.vue'
 import GemBadge from '../components/scrapbook/GemBadge.vue'
 import { authorColor } from '../composables/useFeed'
@@ -77,16 +114,82 @@ import { authorColor } from '../composables/useFeed'
 const hub = ref({ places: [], by_city: [], by_user: [], total: 0 })
 const loading = ref(false)
 
-const totalLabel = computed(() => {
-  const n = hub.value?.total || 0
-  if (n === 0) return 'пусто'
-  if (n === 1) return '1 жемчужина'
-  if (n >= 11 && n <= 14) return `${n} жемчужин`
+function pluralRu(n, forms) {
+  const mod100 = n % 100
+  if (mod100 >= 11 && mod100 <= 14) return forms[2]
   const last = n % 10
-  if (last === 1) return `${n} жемчужина`
-  if (last >= 2 && last <= 4) return `${n} жемчужины`
-  return `${n} жемчужин`
+  if (last === 1) return forms[0]
+  if (last >= 2 && last <= 4) return forms[1]
+  return forms[2]
+}
+
+const subLabel = computed(() => {
+  const n = hub.value.total || 0
+  const cities = hub.value.by_city?.length || 0
+  if (n === 0) return 'пусто'
+  return `${n} ${pluralRu(n, ['жемчужина', 'жемчужины', 'жемчужин'])} в ${cities} ${pluralRu(cities, ['городе', 'городах', 'городах'])}`
 })
+
+const coverOf = (p) => p.image_url || p.feed_photos?.[0]?.url || ''
+
+// Первая найденная — самая ранняя first_marked_at.
+const firstGem = computed(() => {
+  const list = [...(hub.value.places || [])]
+  list.sort((a, b) => {
+    const aT = a.gem_status?.first_marked_at || ''
+    const bT = b.gem_status?.first_marked_at || ''
+    return aT.localeCompare(bT)
+  })
+  return list[0] || null
+})
+
+const restGems = computed(() => {
+  if (!firstGem.value) return hub.value.places || []
+  return (hub.value.places || []).filter(p => p.id !== firstGem.value.id)
+})
+
+const monthsRu = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня',
+                  'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря']
+function shortDateRu(iso) {
+  if (!iso) return ''
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return ''
+  return `${d.getDate()} ${monthsRu[d.getMonth()]}`
+}
+
+// «Алина нашла 5 апреля». Без глагола «нашла/нашёл» (см. R5-Q1) —
+// формат как для шапки: «Имя · дата». Если есть соавторы, добавляем
+// «подтвердили: имена».
+const firstGemHistory = computed(() => {
+  const gs = firstGem.value?.gem_status
+  if (!gs || !gs.marked_by?.length) return null
+  const [first, ...rest] = gs.marked_by
+  const dt = shortDateRu(gs.first_marked_at)
+  const out = {
+    first: `${first.username}${dt ? ` · ${dt}` : ''}`,
+    confirmedExtra: '',
+  }
+  if (rest.length) {
+    out.confirmedExtra = `подтвердили: ${rest.map(u => u.username).join(', ')}`
+  }
+  return out
+})
+
+const placeholders = ['sb-photo-warm', 'sb-photo-olive', 'sb-photo-dusk', 'sb-photo-sage', 'sb-photo-peach', 'sb-photo-brick']
+const placeholderFor = (p) => placeholders[(p?.id ?? 0) % placeholders.length]
+
+const tapeVariants = ['', 'rose', 'mint', 'blue']
+const tapeFor = (p) => tapeVariants[(p?.id ?? 0) % tapeVariants.length]
+const tapeStyleFor = (p) => {
+  const variants = [
+    { top: '-9px', left: '50%', transform: 'translateX(-50%) rotate(-8deg)', width: '52px' },
+    { top: '-9px', left: '16px', transform: 'rotate(-12deg)', width: '46px' },
+  ]
+  return variants[(p?.id ?? 0) % variants.length]
+}
+
+const tilts = ['sb-t-l2', 'sb-t-r1', 'sb-t-l1', 'sb-t-r2']
+const cellTiltFor = (p) => tilts[(p.id ?? 0) % tilts.length]
 
 async function load() {
   loading.value = true
@@ -122,44 +225,108 @@ onMounted(load)
 
 .title-row {
   display: flex;
-  align-items: center;
+  align-items: baseline;
   gap: 10px;
 }
 .title {
   font-family: var(--sb-serif);
   font-style: italic;
   font-weight: 500;
-  font-size: 28px;
+  font-size: 36px;
   color: var(--sb-ink);
   margin: 0;
 }
 .sub {
   font-family: var(--sb-hand);
-  font-size: 16px;
+  font-size: 17px;
   color: var(--sb-ink-mute);
   margin-top: 4px;
 }
 
-.city-list {
-  display: flex;
-  flex-direction: column;
-  padding: 0 16px;
+/* B2 — секция «САМАЯ ПЕРВАЯ» с крупным полароидом и историей справа. */
+.first-gem {
+  padding: 12px 18px 18px;
 }
-.city-item {
+.cap-tag {
+  font-family: var(--sb-hand);
+  font-size: 13px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--sb-ink-mute);
+  margin-bottom: 8px;
+}
+.first-card {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 10px 4px;
-  border-bottom: 1px dashed rgba(40, 30, 20, 0.18);
+  align-items: flex-start;
+  gap: 16px;
   text-decoration: none;
-  color: var(--sb-ink);
+  color: inherit;
+}
+.first-photo {
+  flex: 0 0 auto;
+  transform: rotate(-3deg);
+}
+.gem-corner {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  z-index: 2;
+}
+.first-body {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding-top: 6px;
+}
+.first-name {
   font-family: var(--sb-serif);
   font-style: italic;
-  font-size: 17px;
-
-  &:hover .city-name { color: var(--sb-terracotta); }
+  font-weight: 500;
+  font-size: 22px;
+  color: var(--sb-ink);
+  line-height: 1.1;
 }
-.city-name { flex: 1; word-break: break-word; }
+.first-meta {
+  font-family: var(--sb-hand);
+  font-size: 15px;
+  color: var(--sb-ink-mute);
+  margin-top: 2px;
+}
+.first-history {
+  margin-top: 10px;
+  font-family: var(--sb-hand);
+  font-size: 16px;
+  color: var(--sb-ink-soft);
+  line-height: 1.3;
+}
+.hist-line.dim {
+  color: var(--sb-ink-mute);
+  font-size: 14px;
+}
+
+/* B2 — города чипами, не вертикальным списком. */
+.city-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 10px;
+  padding: 0 18px 4px;
+}
+.city-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  text-decoration: none;
+  color: inherit;
+}
+.chip-count {
+  font-family: var(--sb-hand);
+  font-size: 14px;
+  color: var(--sb-ink-mute);
+}
+.diamond {
+  color: var(--sb-terracotta);
+  margin-left: 2px;
+  font-size: 11px;
+}
 
 .people-row {
   display: flex;
@@ -198,10 +365,15 @@ onMounted(load)
   color: var(--sb-ink-mute);
 }
 
-.shelf {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-  padding: 0 16px;
+/* Все жемчужины — 2-колоночная сетка как на Доске.
+   ArtifactCard сам выберет Polaroid / PhotoFreeCard. */
+.all-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 28px 14px;
+  padding: 14px 16px 26px;
+}
+.all-cell {
+  min-width: 0;
 }
 </style>
