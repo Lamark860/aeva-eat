@@ -101,6 +101,10 @@
   display: inline-block;
   border-radius: 1px;
   max-width: 100%;
+  // Без border-box фотки большого разрешения в fluid-режиме (width: 100%)
+  // выходят за ячейку на 16px из-за полароидного padding. Симптом —
+  // featured-карточки на доске вылезают за грид; body получает гор. скролл.
+  box-sizing: border-box;
 
   // Fluid mode — fills the column, photo is square via aspect-ratio.
   &.fluid {

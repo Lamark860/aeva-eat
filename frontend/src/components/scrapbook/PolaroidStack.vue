@@ -83,13 +83,9 @@ function layerStyle(i) {
 }
 
 const rootStyle = computed(() => {
-  // Стопка отъедает чуть больше места по бокам и снизу-сверху, чтобы
-  // повёрнутые слои не клипались родителем.
-  if (visible.value.length === 1) return {}
-  return {
-    paddingInline: '8%',
-    paddingBlock: '4% 6%',
-  }
+  // Запас для transform слоёв задан через `inset: 8%` на самих layer'ах
+  // (см. SCSS ниже). Никакого padding на root — иначе stack растёт за грид.
+  return {}
 })
 </script>
 
@@ -110,11 +106,12 @@ const rootStyle = computed(() => {
 
 .sb-polaroid-stack:not(.single) .layer {
   position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  /* Каждый слой получает margin от родительского padding (см. rootStyle).
-     inset: 0 ставит его в логическую плоскость, а transform даёт смещение. */
+  /* Inset 8% со всех сторон оставляет «коридор» для translate ±6% и
+     rotate ±4° — слои не вылезают за родителя. width/height:auto,
+     иначе inset игнорируется и слой растягивается на весь padding-box. */
+  inset: 8%;
+  width: auto;
+  height: auto;
 }
 
 .sb-polaroid-stack:not(.single) {
