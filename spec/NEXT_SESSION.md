@@ -85,15 +85,15 @@ node shot-v3-boards.mjs                          # 6 артбордов v3
 - ✅ **R5-Q4 — мягкий tilt на wishlist.** В `Home.vue#cellTilt`: для `_kind === 'wishlist'` используется отдельный пул `softTilts = [l1, r1, l2, r2]` — без агрессивных ±3°. План концептуально не «живое впечатление», ему лишний наклон ни к чему.
 - ✅ **R5-Q5 — «тапни» fallback на video kruzhok.** В `ArtifactCard.vue#forcePoster` после seek на 0.1s ставится setTimeout 500мс: если `currentTime` всё ещё 0 — добавляется класс `posterless` на `.art-kruzhok-layer`. CSS показывает рукописный плейсхолдер «тапни» поверх тёмной подложки. Скрывается при `.playing`.
 - ✅ **R5-Q6 — разделитель «не пробовал(а)».** В `Places.vue` при `sort=rating_user:N` параллельно загружаются `/users/N/places` → `Set` placeId'ов. `splitResults` делит `placesStore.places` на «оценённые другом» и «остальные»; между ними вставляется маркер `{ _divider: true, _friendName, _friendFem }`. Template рендерит плашку «… а вот эти Аня ещё не пробовала» (или «пробовал»). Гендер — эвристикой по `-а/-я`.
+- ✅ **Сидинг demo-данных.** `backend/scripts/seed_demo.sh` + `seed_demo_down.sh`. Заливает 5 seed-юзеров (`seed_anna/petr/olga/max/kate`), 30 мест в Москве/СПб/Самаре, 60 reviews (часть с длинными комментами для Q-layout, ~30% gem, 25% с фото), 15 review_photos (с picsum.photos), 1 note, 2 wishlist_custom. Все объекты помечены через `users.username LIKE 'seed_%'` — unseed одной командой каскадно убирает всё, реальные данные (lamark/alina/charlie) не затрагиваются. **Bugfix:** в `CityPage.vue` автор цитаты от круга больше не захардкожен «Серёжа» — берётся из `place.reviewers[0].username`.
 - 📸 Контроль: `screenshots/mobile-09b-person-lamark-top.png` (lamark viewport), `screenshots/mobile-09-person.png` (charlie — 4 места, всё видно), `screenshots/mobile-07b-gems-top.png` (Gems Hub), `screenshots/mobile-08b-city-izhevsk.png` (Город), `screenshots/mobile-10b-place-header.png` (шапка), `screenshots/mobile-06b-profile-header.png` (профиль), `screenshots/mobile-14b-share.png` (share), `screenshots/mobile-03b-board-expanded.png` (доска).
 
 ## Что делать в первую очередь (следующий раунд)
 
 В приоритетном порядке (полный список — `R6_DESIGNER_REVIEW.md` → Приоритеты):
 
-1. **Сидинг 25–30 fake мест с разнообразием** — без этого CityPage Казани (122 места, 0 фото и 0 цитат) выглядит пусто на скринах.
-2. **Рефактор `ArtifactCard.vue` (D1).** Разнести на `ArtifactPolaroid` / `PhotoFreeCard` / `KruzhokStack` + тонкий роутер.
-3. **D2-D4 структурные** — priority full-width (gem > video > первый), убрать `grid-auto-flow:dense` или закрепить композицию, kruzhok-miss телеметрия.
+1. **Рефактор `ArtifactCard.vue` (D1).** Разнести на `ArtifactPolaroid` / `PhotoFreeCard` / `KruzhokStack` + тонкий роутер.
+2. **D2-D4 структурные** — priority full-width (gem > video > первый), убрать `grid-auto-flow:dense` или закрепить композицию, kruzhok-miss телеметрия.
 
 > ⚠️ Заметка о P0: оригинальный план «SQL COALESCE не работает» оказался неверным. SQL работает; проблема была в данных. Если у будущей сессии возникнет такая же гипотеза — проверять данные SQL'ом до правки кода. См. `R6_DESIGNER_REVIEW.md` секция R6.1.
 

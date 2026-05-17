@@ -53,7 +53,7 @@
           <span class="cq-mark">«</span>{{ cityQuote.text }}<span class="cq-mark">»</span>
         </blockquote>
         <router-link :to="`/places/${cityQuote.placeId}`" class="cq-source">
-          — Серёжа · {{ cityQuote.placeName }}
+          — {{ cityQuote.author }} · {{ cityQuote.placeName }}
         </router-link>
       </section>
 
@@ -120,6 +120,7 @@ const coverOf = (p) => p.image_url || p.feed_photos?.[0]?.url || ''
 const featuredGems = computed(() => gems.value.slice(0, 3))
 
 // B1 — цитата от круга. Ищем место с самым длинным top_review_comment.
+// Автор — первый из place.reviewers (бэк отдаёт их с /api/cities/:name/places).
 const cityQuote = computed(() => {
   const candidates = [...gems.value, ...places.value]
   let best = null
@@ -130,7 +131,9 @@ const cityQuote = computed(() => {
   }
   if (!best) return null
   const text = best.c.length > 180 ? best.c.slice(0, 179).trimEnd() + '…' : best.c
-  return { text, placeId: best.p.id, placeName: best.p.name }
+  const firstReviewer = (best.p.reviewers || [])[0]
+  const author = firstReviewer?.username || 'круг'
+  return { text, placeId: best.p.id, placeName: best.p.name, author }
 })
 
 const placeholders = ['sb-photo-warm', 'sb-photo-olive', 'sb-photo-dusk', 'sb-photo-sage', 'sb-photo-peach', 'sb-photo-brick']

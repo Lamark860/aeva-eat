@@ -287,6 +287,43 @@ if (total > 0 && n / total < LOVE_MIN_SHARE) return ''
 
 ---
 
+## R6.9 — сидинг demo-данных (2026-05-17)
+
+**Цель:** разблокировать визуальную проверку CityPage/GemsHub на масштабе (Казань с 122 местами и 0 фото — плохой demo) + дать кругу что показать на скринах.
+
+**Решение:** два bash-скрипта в `backend/scripts/`:
+- `seed_demo.sh` — заливает помеченные данные
+- `seed_demo_down.sh` — каскадно сносит за одну команду
+
+**Что льётся:**
+- **5 юзеров** с префиксом `seed_*` (anna, petr, olga, max, kate) с password `demo12345`
+- **30 мест** в **новых городах** (Москва 12, СПб 12, Самара 6) — не пересекаются с реальными Казань/Нижний/Ижевск
+- **60 reviews** (~2 на место): ~70% с длинными комментариями (Q-layout PhotoFreeCard и цитаты), ~30% с `is_gem`, 25% с `image_url`
+- **15 review_photos** скачаны с picsum.photos в `/app/uploads/seed_*.jpg`
+- **1 note** от seed_petr на Доске без места
+- **2 wishlist_custom** у seed_anna
+
+**Маркировка для unseed:** всё через `users.username LIKE 'seed_%'`. Команда снесения:
+```sql
+DELETE FROM places WHERE created_by IN (SELECT id FROM users WHERE username LIKE 'seed_%');
+DELETE FROM users WHERE username LIKE 'seed_%';
+```
+Каскадно подметает: reviews, review_authors, review_photos, place_categories, wishlists, notes, wishlist_custom, invites. Реальные данные не затрагиваются. Плюс `rm /app/uploads/seed_*.jpg`.
+
+**Bugfix по ходу:** автор цитаты от круга в `CityPage.vue` был захардкожен «Серёжа» (костыль из R6.5). Теперь берётся из `place.reviewers[0].username`.
+
+**Контроль:**
+- `screenshots/mobile-08d-city-moscow.png` — Москва: жемчужины-shelf (Восход + Lavkalavka) с реальными фото, цитата «Зашли случайно... — seed_anna · Pinch».
+- `screenshots/mobile-08e-city-spb.png` — Санкт-Петербург аналогично.
+- `screenshots/mobile-07c-gems-seeded.png` — Gems Hub: 33 жемчужины в 6 городах, 7 кураторов.
+- `screenshots/mobile-03d-board-seed-anna.png` — Доска seed_anna с её визитами.
+
+**Что осталось от R6:**
+- D1 рефактор ArtifactCard.
+- D2/D3/D4 структурные.
+
+---
+
 ## A. Критическое — скрапбук без фото перестаёт быть скрапбуком
 
 **Это приоритет 0. Пока не починим — на доске пустые клетки, и приложение читается как сырое. Можно сделать всё остальное идеально, но если 90% полароидов остаются пустыми — скрапбук-метафора не работает, и весь концепт-арт зря.**
