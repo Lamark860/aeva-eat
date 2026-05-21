@@ -27,7 +27,7 @@ func Load() *Config {
 		DBSSLMode:     getEnv("DB_SSLMODE", "disable"),
 		JWTSecret:     getEnv("JWT_SECRET", "dev-secret-key"),
 		APIPort:       getEnv("API_PORT", "8085"),
-		GeosuggestKey: getEnv("GEOSUGGEST_KEY", "9500e2ca-ad3b-4503-be48-8b732a773857"),
+		GeosuggestKey: getEnv("GEOSUGGEST_KEY", ""),
 	}
 }
 
