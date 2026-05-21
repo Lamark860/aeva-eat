@@ -3,7 +3,7 @@
 ## Что делаем в MVP
 
 ### Дизайн-система
-- Полная скрапбук-CSS (`scrapbook.css` уже есть в прототипе)
+- Полная скрапбук-система (`frontend/src/assets/scss/scrapbook.scss`)
 - Шрифты Lora + Caveat
 - Все примитивы: polaroid, tape, stamp, ticket, note, gem-badge, author-tag, kruzhok, pin-btn
 
