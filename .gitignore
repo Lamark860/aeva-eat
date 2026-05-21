@@ -4,3 +4,9 @@ node_modules/
 .env
 .env.local
 dist/
+
+# Дампы БД / бэкапы / архивы аплоадов — содержат персональные данные
+*.sql.gz
+*.dump
+uploads_*.tar.gz
+backup_*.sql*
