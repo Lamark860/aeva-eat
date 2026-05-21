@@ -18,14 +18,10 @@ export default defineConfig({
       '.ngrok.app',              // ngrok платный домен
       '.trycloudflare.com',      // Cloudflare Tunnel — на случай переключения
     ],
-    // HMR через ngrok: WS-канал по разным причинам бьётся (ws-upgrade
-    // через CDN-туннель, browser-interstitial, free-tier лимиты), и
-    // Vite после нескольких неудачных пингов делает full-reload страницы —
-    // отсюда «мерцание / постоянные перезагрузки» в туннеле.
-    // Отключаем HMR на время демо-сессии. Локальная разработка через
-    // localhost тоже без HMR — обновляем вручную Cmd+R, это терпимо.
-    // Когда туннель закроем, можно вернуть `hmr: true`.
-    hmr: false,
+    // usePolling нужен для file-watch внутри Docker bind-mount на macOS
+    // (нативные fs-события не пробрасываются в контейнер).
+    // Прим.: при шаринге через CDN-туннель (ngrok/cloudflare) HMR-WS может
+    // биться — тогда временно выставить `hmr: false` на время демо-сессии.
     watch: {
       usePolling: true
     }
