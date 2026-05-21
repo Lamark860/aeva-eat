@@ -1,19 +1,26 @@
 # Деплой AEVA Eat на VPS
 
 Прод-стек: `postgres + backend (Go) + frontend (Vite build) + nginx`, всё через
-`docker-compose.prod.yml`. Backend применяет миграции автоматически при старте
-(идемпотентно — `IF NOT EXISTS` / `ON CONFLICT`).
+`docker-compose.prod.yml`. Backend применяет миграции схемы автоматически при старте
+(идемпотентно — `IF NOT EXISTS` / `ON CONFLICT`). Демо-данные (`005_seed_data`)
+**больше не сидятся автоматически** — только реальные данные из дампа (см. §0).
 
 Текущий режим доступа — по IP и порту: `http://<IP>:8091`. Перевод на домен +
 HTTPS (Traefik) — см. в конце.
+
+> ⚠️ `APP_PORT=8091` обязателен в `.env`: на сервере 80/443 уже заняты Traefik'ом,
+> и без своего порта nginx приложения упадёт с `port is already allocated`.
 
 ---
 
 ## 0. Перенос реальных данных (важно)
 
 Реальные данные (юзеры alina/lamark, места, отзывы) живут **в БД, а не в репозитории**.
-Демо-seed `005_seed_data.up.sql` (alice/bob/charlie) — фейковый, накатывается миграцией.
 Чтобы на проде были настоящие данные, их нужно перенести дампом.
+
+> Демо-данные (`005_seed_data` — alice/bob/charlie, и `scripts/seed_demo.sh` — seed_*)
+> в прод НЕ нужны. `005` убран из авто-миграций; если случайно зальёшь демо —
+> чистка: `DELETE FROM places WHERE created_by IN (SELECT id FROM users WHERE username LIKE 'seed\_%'); DELETE FROM users WHERE username LIKE 'seed\_%';`
 
 ### Снять дамп с исходной машины (где крутится рабочая БД)
 
@@ -69,7 +76,8 @@ backend накатит миграции (иначе `CREATE TABLE` из дамп
 ```bash
 docker compose -f docker-compose.prod.yml up -d postgres
 sleep 5
-gzcat aeva_eat_<STAMP>.sql.gz | docker exec -i aeva-postgres-prod psql -U aeva -d aeva_eat
+# на Linux — zcat (gzcat это macOS). Альтернатива: gunzip -c
+zcat aeva_eat_<STAMP>.sql.gz | docker exec -i aeva-postgres-prod psql -U aeva -d aeva_eat
 ```
 
 ## 4. Восстановить фото в volume
@@ -101,9 +109,15 @@ curl -s http://localhost:8091/api/health
   docker exec -it aeva-postgres-prod psql -U aeva -d aeva_eat \
     -c "UPDATE users SET role='superuser' WHERE username='<твой_логин>';"
   ```
-- **Сменить слабые пароли.** У демо-аккаунтов (charlie, seed_*) и у `lamark` пароль
-  из разряда демо (`demo12345`/`password123`). На публичном проде смени пароль
-  суперюзера через профиль сразу после первого входа.
+- **Сменить слабые пароли.** У `lamark` пароль из разряда демо (`demo12345`).
+  На публичном проде смени пароль суперюзера через профиль сразу после первого входа.
+- **DB_PASSWORD со спецсимволами** теперь безопасен (DSN URL-экранируется в коде).
+  Но если разворачиваешь старый образ — избегай `( ) @ / ?` в пароле, иначе
+  backend упадёт с `invalid port after host` (502). Сменить пароль роли без потери данных:
+  ```bash
+  docker exec aeva-postgres-prod psql -U aeva -d aeva_eat -c "ALTER USER aeva WITH PASSWORD '<новый>';"
+  ```
+  (затем тот же пароль в `.env` → `up -d backend`)
 - **Яндекс-ключи** привязываются к домену/хосту в кабинете. По голому IP карта может
   не отрисоваться (referer); геосаджест (серверный) работает в любом случае.
 - **Бэкап БД:**

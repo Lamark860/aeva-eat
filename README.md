@@ -126,13 +126,27 @@ cd backend && go test ./...
 
 ## Продакшн-деплой
 
+Полная пошаговая инструкция (перенос реальной БД, restore, Traefik/HTTPS) — в **[`DEPLOY.md`](./DEPLOY.md)**.
+
+Кратко:
+
 ```bash
 # 1. Создать .env из шаблона
 cp .env.example .env
-# отредактировать .env — задать надёжные DB_PASSWORD и JWT_SECRET
+# задать: DB_PASSWORD, JWT_SECRET, APP_PORT, GEOSUGGEST_KEY, VITE_YANDEX_MAPS_KEY
 
 # 2. Запустить
 docker compose -f docker-compose.prod.yml up --build -d
 ```
 
-Приложение будет доступно на порту `APP_PORT` (по умолчанию 80).
+Переменные окружения (`.env`):
+
+| Переменная | Назначение |
+|---|---|
+| `DB_PASSWORD` | пароль PostgreSQL |
+| `JWT_SECRET` | секрет для подписи JWT (`openssl rand -base64 48`) |
+| `APP_PORT` | порт наружу (за Traefik — свой, напр. `8091`) |
+| `GEOSUGGEST_KEY` | ключ Яндекс Геосаджеста (бэкенд, рантайм) |
+| `VITE_YANDEX_MAPS_KEY` | ключ Яндекс JS API Карт (печётся во фронт на сборке) |
+
+Приложение будет доступно на порту `APP_PORT`.
