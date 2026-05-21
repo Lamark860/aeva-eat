@@ -216,7 +216,10 @@ func runMigrations(db *sql.DB) error {
 		"migrations/013_notes.up.sql",
 		"migrations/014_feed_unread.up.sql",
 		"migrations/015_wishlist_struck.up.sql",
-		"migrations/005_seed_data.up.sql",
+		// ВНИМАНИЕ: 005_seed_data — это ДЕМО-данные, не схема. Раньше он стоял
+		// здесь и прогонялся при каждом старте; т.к. wishlist_custom не имеет
+		// уникального индекса, ON CONFLICT не срабатывал и записи плодились
+		// (по копии на рестарт). Демо-сид теперь руками: backend/scripts/seed_demo.sh.
 	}
 	for _, f := range files {
 		migrationSQL, err := os.ReadFile(f)
