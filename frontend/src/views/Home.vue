@@ -206,37 +206,43 @@ function toggleBucket(key) {
   expandedBuckets.value = next
 }
 
-// DESIGN-DECISIONS Q10: «бумага раскрывается» — height-animate 320мс на разворот
-// прошедшей недели. Натуральная высота меряется через scrollHeight и анимируется
-// в один проход; opacity stagger детей идёт через CSS animation-delay (см. .doska-archive .doska-cell).
-const ARCHIVE_EASE = 'cubic-bezier(0.2, 0.8, 0.2, 1)'
-function onArchiveEnter(el, done) {
+// DESIGN-DECISIONS Q10: «бумага раскрывается» — высота + прозрачность анимируются
+// вместе (рост без fade выглядит как жёсткий клип). Натуральная высота меряется
+// через scrollHeight; дети въезжают CSS-staggers'ом (см. .archive-stagger .doska-cell).
+// transitionend слушаем только по height; setTimeout-fallback на случай если он не стрельнёт.
+const ARCHIVE_EASE = 'cubic-bezier(0.22, 0.61, 0.36, 1)'
+const ARCHIVE_MS = 360
+function animateHeight(el, from, to, fade, done) {
   el.style.overflow = 'hidden'
-  el.style.height = '0px'
-  // force reflow so the transition starts from 0
+  el.style.willChange = 'height, opacity'
+  el.style.height = from
+  el.style.opacity = fade[0]
+  // force reflow so the transition starts from `from`
   void el.offsetHeight
-  el.style.transition = `height 320ms ${ARCHIVE_EASE}`
-  el.style.height = el.scrollHeight + 'px'
-  const onEnd = () => {
+  el.style.transition = `height ${ARCHIVE_MS}ms ${ARCHIVE_EASE}, opacity ${ARCHIVE_MS - 100}ms ease`
+  el.style.height = to
+  el.style.opacity = fade[1]
+  let finished = false
+  const cleanup = (e) => {
+    if (e && e.propertyName !== 'height') return
+    if (finished) return
+    finished = true
     el.style.height = ''
     el.style.transition = ''
     el.style.overflow = ''
-    el.removeEventListener('transitionend', onEnd)
+    el.style.opacity = ''
+    el.style.willChange = ''
+    el.removeEventListener('transitionend', cleanup)
     done()
   }
-  el.addEventListener('transitionend', onEnd)
+  el.addEventListener('transitionend', cleanup)
+  setTimeout(cleanup, ARCHIVE_MS + 90)
+}
+function onArchiveEnter(el, done) {
+  animateHeight(el, '0px', el.scrollHeight + 'px', ['0', '1'], done)
 }
 function onArchiveLeave(el, done) {
-  el.style.overflow = 'hidden'
-  el.style.height = el.scrollHeight + 'px'
-  void el.offsetHeight
-  el.style.transition = `height 320ms ${ARCHIVE_EASE}`
-  el.style.height = '0px'
-  const onEnd = () => {
-    el.removeEventListener('transitionend', onEnd)
-    done()
-  }
-  el.addEventListener('transitionend', onEnd)
+  animateHeight(el, el.scrollHeight + 'px', '0px', ['1', '0'], done)
 }
 
 const currentVisible = computed(() => (buckets.value.current?.items || []).slice(0, visibleCount.value))
@@ -396,9 +402,17 @@ onMounted(() => {
   to   { opacity: 1; translate: 0 0; }
 }
 
-// Q10: при разворачивании архива дети вступают со stagger 40мс — «бумага раскрывается».
+// Q10: при разворачивании архива дети вступают со stagger — «бумага раскрывается».
+// Индекс ограничиваем (min ...), иначе на длинной неделе хвост докручивается
+// заметно дольше, чем растёт высота контейнера, и это читается как лаг.
 .archive-stagger .doska-cell {
-  animation-delay: calc(var(--i, 0) * 40ms);
+  animation-delay: calc(min(var(--i, 0), 5) * 30ms);
+}
+
+// Доступность: при системном «уменьшить движение» гасим mount-анимации
+// (контейнер всё равно раскроется по высоте — это не вестибулярная анимация).
+@media (prefers-reduced-motion: reduce) {
+  .doska-cell { animation: none; }
 }
 
 .doska-archive {
