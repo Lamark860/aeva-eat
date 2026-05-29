@@ -93,6 +93,7 @@ function setMarker(lat, lng) {
     map?.setCenter([lat, lng], Math.max(map.getZoom(), 15), { duration: 300 })
     emit('update:modelValue', { lat, lng })
   } catch (e) {
+    // eslint-disable-next-line no-console
     console.error('[LocationPicker] setMarker error:', e)
   }
 }
@@ -193,7 +194,6 @@ function onBlur() {
 function searchAndPlace(query, originalName) {
   if (!query || !map) return
   const searchQ = query
-  console.log('[LocationPicker] searchAndPlace:', searchQ)
   ymaps.search(searchQ, {
     results: 1,
     boundedBy: map.getBounds(),
@@ -219,7 +219,6 @@ function searchAndPlace(query, originalName) {
       }
 
       // Business results have companyMetaData with structured address
-      const company = props.companyMetaData
       const isBiz = props.type === 'business'
       const address = isBiz
         ? description.replace(/, [^,]+$/, '') // remove city from end
