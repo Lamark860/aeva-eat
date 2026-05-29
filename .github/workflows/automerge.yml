@@ -1,0 +1,31 @@
+name: Auto-merge dev → master
+
+# Включает GitHub auto-merge на PR из ветки dev в master.
+# Дальше GitHub сам смержит PR, как только пройдут required-проверки (CI) и
+# выполнятся правила branch protection. После merge сработает deploy.yml.
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, ready_for_review]
+    branches: [master]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  enable-auto-merge:
+    # только для PR из dev и не-черновиков
+    if: github.event.pull_request.head.ref == 'dev' && github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    steps:
+      - name: Enable auto-merge (squash)
+        env:
+          # ВАЖНО: нужен PAT реального пользователя (secrets.GH_PAT).
+          # Если включить auto-merge через дефолтный GITHUB_TOKEN, итоговый
+          # merge-push в master будет от github-actions[bot] и НЕ запустит
+          # deploy.yml (защита от рекурсии workflow). С PAT push атрибутируется
+          # пользователю и deploy триггерится. Подробности — в
+          # _local_docs/internal/deploy/auto-deploy.md.
+          GH_TOKEN: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+        run: gh pr merge --auto --squash "$PR_URL"

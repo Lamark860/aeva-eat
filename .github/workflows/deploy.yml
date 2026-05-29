@@ -1,0 +1,57 @@
+name: Deploy to VPS
+
+# Деплой на прод. Триггерится push'ем в master (после auto-merge PR из dev),
+# либо вручную через кнопку Run workflow.
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+# Деплои не параллелим: один за другим, текущий не отменяем на полпути.
+concurrency:
+  group: deploy-vps
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: SSH redeploy
+    runs-on: ubuntu-latest
+    steps:
+      - name: SSH and redeploy
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: ${{ secrets.VPS_PORT || 22 }}
+          script_stop: true       # упасть на первой же ошибке внутри script
+          command_timeout: 30m    # первая сборка образов может быть долгой
+          script: |
+            set -e
+            cd "${{ secrets.VPS_PATH }}"
+
+            echo "==> Подтягиваю master"
+            git fetch --all --prune
+            git reset --hard origin/master
+
+            echo "==> Пересобираю и поднимаю прод-стек"
+            # .env (секреты прода) лежит на сервере, в git его нет — reset его не трогает.
+            # Миграции схемы backend накатывает сам при старте (идемпотентно).
+            docker compose -f docker-compose.prod.yml up -d --build
+
+            echo "==> Чищу висячие образы"
+            docker image prune -f
+
+            echo "==> Health-check"
+            APP_PORT=$(grep -E '^APP_PORT=' .env | cut -d '=' -f2- | tr -d '[:space:]')
+            APP_PORT=${APP_PORT:-80}
+            sleep 5
+            for i in 1 2 3 4 5 6; do
+              if curl -fsS "http://localhost:${APP_PORT}/api/health"; then
+                echo "  OK ($APP_PORT)"; exit 0
+              fi
+              echo "  ждём backend ($i)…"; sleep 5
+            done
+            echo "ВНИМАНИЕ: health-check не прошёл, логи:"
+            docker compose -f docker-compose.prod.yml logs --tail=80 backend nginx
+            exit 1
