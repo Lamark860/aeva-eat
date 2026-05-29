@@ -14,9 +14,6 @@ export default defineConfig({
       '192.168.1.10',
       '.lan',                    // some routers expose hostnames as *.lan
       '.ts.net',                 // Tailscale MagicDNS, if used later
-      '.ngrok-free.dev',         // ngrok-туннель для шаринга снаружи (free tier)
-      '.ngrok.app',              // ngrok платный домен
-      '.trycloudflare.com',      // Cloudflare Tunnel — на случай переключения
     ],
     // usePolling нужен для file-watch внутри Docker bind-mount на macOS
     // (нативные fs-события не пробрасываются в контейнер).
