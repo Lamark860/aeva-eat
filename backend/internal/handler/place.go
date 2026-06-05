@@ -2,6 +2,7 @@ package handler
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -172,8 +173,15 @@ func (h *PlaceHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 	created, err := h.placeRepo.Create(place, req.CategoryIDs)
 	if err != nil {
-		if strings.Contains(err.Error(), "idx_places_name_city") {
-			writeJSON(w, http.StatusConflict, map[string]string{"error": "Такое заведение уже существует в этом городе"})
+		var dup *repository.DuplicatePlaceError
+		if errors.As(err, &dup) {
+			// 409 несёт само существующее место (если нашлось), чтобы фронт
+			// предложил «перейти и оставить отзыв», а не показывал тупик.
+			resp := map[string]any{"error": "duplicate", "message": "Такое место уже есть"}
+			if dup.Existing != nil {
+				resp["existing"] = dup.Existing
+			}
+			writeJSON(w, http.StatusConflict, resp)
 			return
 		}
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to create place"})
@@ -236,6 +244,11 @@ func (h *PlaceHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 	updated, err := h.placeRepo.Update(place, req.CategoryIDs)
 	if err != nil {
+		var dup *repository.DuplicatePlaceError
+		if errors.As(err, &dup) {
+			writeJSON(w, http.StatusConflict, map[string]string{"error": "Такое заведение уже существует в этом городе"})
+			return
+		}
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to update place"})
 		return
 	}

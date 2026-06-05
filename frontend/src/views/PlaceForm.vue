@@ -8,6 +8,30 @@
 
       <div v-if="error" class="alert alert-danger">{{ error }}</div>
 
+      <!-- Дубль: место с такой же идентичностью уже есть. Не тупик — развилка. -->
+      <div v-if="duplicate" class="dup-card">
+        <div class="dup-title">Кажется, такое место уже есть</div>
+        <div v-if="duplicate.id" class="dup-existing">
+          <div class="fw-semibold">{{ duplicate.name }}</div>
+          <div class="text-muted small">
+            <span v-if="duplicate.city">{{ duplicate.city }}</span>
+            <span v-if="duplicate.city && duplicate.address">, </span>
+            <span v-if="duplicate.address">{{ duplicate.address }}</span>
+          </div>
+          <div v-if="duplicate.review_count" class="text-muted small mt-1">
+            уже {{ duplicate.review_count }} {{ duplicate.review_count === 1 ? 'отзыв' : 'отзыв(ов)' }} от круга
+          </div>
+        </div>
+        <div class="dup-actions">
+          <button v-if="duplicate.id" type="button" class="btn btn-apply" @click="goToExisting">
+            перейти и оставить отзыв
+          </button>
+          <button type="button" class="cancel-link" @click="refineAddress">
+            это другой филиал — уточнить адрес
+          </button>
+        </div>
+      </div>
+
       <form @submit.prevent="handleSubmit">
         <!-- Карта (поиск заведения) — ПЕРВЫМ -->
         <div class="form-section">
@@ -178,6 +202,9 @@ const headerSub = computed(() => {
   return 'найдите на карте или введите вручную'
 })
 const error = ref('')
+// duplicate — существующее место, если бэк вернул 409 (та же идентичность).
+// null = дубля нет. Показываем развилку вместо красной плашки-тупика.
+const duplicate = ref(null)
 const loading = ref(false)
 const selectedImage = ref(null)
 const previewUrl = ref(null)
@@ -239,8 +266,22 @@ function onPlaceFound(info) {
   foundCategories.value = info.categories || []
 }
 
+function goToExisting() {
+  if (duplicate.value?.id) {
+    router.push({ path: `/places/${duplicate.value.id}`, query: { review: 'open' } })
+  }
+}
+
+function refineAddress() {
+  // «Это другой филиал» — отличается адрес. Раскрываем ручной ввод, чтобы
+  // пользователь уточнил адрес (он входит в ключ идентичности) и пересоздал.
+  duplicate.value = null
+  showManual.value = true
+}
+
 async function handleSubmit() {
   error.value = ''
+  duplicate.value = null
   loading.value = true
   try {
     const data = {
@@ -281,7 +322,12 @@ async function handleSubmit() {
       }
     }
   } catch (e) {
-    error.value = e.response?.data?.error || 'Ошибка при сохранении'
+    if (e.duplicate) {
+      // Место уже есть — показываем карточку существующего с развилкой.
+      duplicate.value = e.existing || {}
+    } else {
+      error.value = e.response?.data?.error || 'Ошибка при сохранении'
+    }
   } finally {
     loading.value = false
   }
@@ -382,6 +428,33 @@ async function handleImageUpload() {
   padding: 10px 12px;
 }
 .found-icon { font-size: 1.3rem; line-height: 1; }
+
+.dup-card {
+  background: oklch(0.95 0.04 85 / 0.6);
+  border: 1.4px dashed rgba(40, 30, 20, 0.3);
+  border-radius: 4px;
+  padding: 14px 16px;
+  margin-bottom: 14px;
+}
+.dup-title {
+  font-family: var(--sb-serif);
+  font-style: italic;
+  font-size: 17px;
+  color: var(--sb-ink);
+  margin-bottom: 8px;
+}
+.dup-existing {
+  background: var(--sb-paper-card);
+  border-radius: 3px;
+  padding: 8px 10px;
+  margin-bottom: 12px;
+}
+.dup-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
 .manual-arrow {
   display: inline-block;
   transition: transform 0.2s;

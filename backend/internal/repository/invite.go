@@ -116,7 +116,24 @@ func (r *InviteRepo) ListAll() ([]model.Invite, error) {
 	return invites, nil
 }
 
-func (r *InviteRepo) Delete(id int) error {
-	_, err := r.db.Exec(`DELETE FROM invites WHERE id = $1`, id)
-	return err
+// Delete удаляет инвайт с проверкой владения прямо в SQL: удалить может только
+// создатель (created_by = userID) или superuser. Возвращает sql.ErrNoRows, если
+// ничего не совпало (чужой инвайт или несуществующий id) — иначе любой
+// участник мог бы перебором id удалять чужие приглашения (IDOR).
+func (r *InviteRepo) Delete(id, userID int, isSuperuser bool) error {
+	res, err := r.db.Exec(
+		`DELETE FROM invites WHERE id = $1 AND (created_by = $2 OR $3)`,
+		id, userID, isSuperuser,
+	)
+	if err != nil {
+		return err
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return sql.ErrNoRows
+	}
+	return nil
 }

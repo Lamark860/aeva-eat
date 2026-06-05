@@ -62,8 +62,9 @@ nano .env
 
 | Переменная | Значение |
 |---|---|
+| `APP_ENV` | `production` (включает fail-fast: пустой/дефолтный `JWT_SECRET` → backend не стартует) |
 | `DB_PASSWORD` | надёжный пароль БД |
-| `JWT_SECRET` | `openssl rand -base64 48` |
+| `JWT_SECRET` | `openssl rand -base64 48` (в `production` обязан быть не-дефолтным) |
 | `APP_PORT` | `8091` |
 | `GEOSUGGEST_KEY` | ключ Яндекс Геосаджеста |
 | `VITE_YANDEX_MAPS_KEY` | ключ Яндекс JS API Карт |
@@ -120,7 +121,22 @@ curl -s http://localhost:8091/api/health
   (затем тот же пароль в `.env` → `up -d backend`)
 - **Яндекс-ключи** привязываются к домену/хосту в кабинете. По голому IP карта может
   не отрисоваться (referer); геосаджест (серверный) работает в любом случае.
-- **Бэкап БД:**
+- **Бэкап БД + фото (по расписанию).** Пользовательский контент (отзывы, заметки,
+  фото, видео) — единственная невосстановимая ценность; держать его без бэкапа на
+  одном диске VPS = риск безвозвратной потери. В репозитории есть готовый скрипт
+  `backend/scripts/backup.sh` (дамп БД + архив volume `uploads_data` + ротация):
+  ```bash
+  # разовый запуск из каталога прод-стека
+  cd /opt/projects/aeva-eat && ./backend/scripts/backup.sh
+
+  # cron: ежедневно в 04:30, хранить 14 копий
+  crontab -e
+  30 4 * * * cd /opt/projects/aeva-eat && ./backend/scripts/backup.sh >> /var/log/aeva-backup.log 2>&1
+  ```
+  Раз в период копируйте дампы **off-site** (S3/другой хост) и хотя бы раз
+  проверьте восстановление из бэкапа.
+
+  Разовый дамп только БД (без скрипта):
   ```bash
   docker exec aeva-postgres-prod pg_dump -U aeva -d aeva_eat --no-owner \
     | gzip > backup_$(date +%F).sql.gz

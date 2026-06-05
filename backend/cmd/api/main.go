@@ -20,6 +20,9 @@ import (
 
 func main() {
 	cfg := config.Load()
+	if err := cfg.Validate(); err != nil {
+		log.Fatalf("invalid configuration: %v", err)
+	}
 
 	db, err := sql.Open("postgres", cfg.DatabaseURL())
 	if err != nil {
@@ -216,6 +219,7 @@ func runMigrations(db *sql.DB) error {
 		"migrations/013_notes.up.sql",
 		"migrations/014_feed_unread.up.sql",
 		"migrations/015_wishlist_struck.up.sql",
+		"migrations/016_place_identity.up.sql",
 		// ВНИМАНИЕ: 005_seed_data — это ДЕМО-данные, не схема. Раньше он стоял
 		// здесь и прогонялся при каждом старте; т.к. wishlist_custom не имеет
 		// уникального индекса, ON CONFLICT не срабатывал и записи плодились

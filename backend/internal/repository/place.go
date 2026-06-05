@@ -2,6 +2,7 @@ package repository
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -12,6 +13,23 @@ import (
 
 type PlaceRepo struct {
 	db *sql.DB
+}
+
+// DuplicatePlaceError возвращается Create/Update, когда место с такой же
+// идентичностью (name + address + city, см. migrations/016) уже существует.
+// Existing хранит конфликтующую запись (может быть nil, если её не удалось
+// перечитать) — фронт показывает «это оно? → перейти и оставить отзыв».
+type DuplicatePlaceError struct {
+	Existing *model.Place
+}
+
+func (e *DuplicatePlaceError) Error() string { return "place already exists" }
+
+// isUniqueViolation — Postgres unique_violation (23505). Не завязано на имя
+// индекса, поэтому переименование индекса ничего не ломает.
+func isUniqueViolation(err error) bool {
+	var pqErr *pq.Error
+	return errors.As(err, &pqErr) && pqErr.Code == "23505"
 }
 
 func NewPlaceRepo(db *sql.DB) *PlaceRepo {
@@ -401,6 +419,15 @@ func (r *PlaceRepo) Create(p *model.Place, categoryIDs []int) (*model.Place, err
 	`, p.Name, p.Address, p.City, p.Lat, p.Lng, p.CuisineTypeID, p.Website, p.ImageURL, p.CreatedBy,
 	).Scan(&p.ID, &p.CreatedAt, &p.UpdatedAt)
 	if err != nil {
+		// Идентичность совпала с уже существующим местом — отдаём его наверх,
+		// чтобы UI предложил «перейти и оставить отзыв», а не глухую ошибку.
+		if isUniqueViolation(err) {
+			existing, ferr := r.findByIdentity(p.Name, p.Address, p.City)
+			if ferr != nil {
+				existing = nil
+			}
+			return nil, &DuplicatePlaceError{Existing: existing}
+		}
 		return nil, err
 	}
 
@@ -417,6 +444,23 @@ func (r *PlaceRepo) Create(p *model.Place, categoryIDs []int) (*model.Place, err
 	return r.GetByID(p.ID)
 }
 
+// findByIdentity находит место по тому же ключу, что и uniqueный idx_places_identity
+// (LOWER(name) + LOWER(address) + LOWER(city)). Возвращает полную карточку.
+func (r *PlaceRepo) findByIdentity(name string, address, city *string) (*model.Place, error) {
+	var id int
+	err := r.db.QueryRow(`
+		SELECT id FROM places
+		WHERE LOWER(name) = LOWER($1)
+		  AND LOWER(COALESCE(address, '')) = LOWER(COALESCE($2, ''))
+		  AND LOWER(COALESCE(city, '')) = LOWER(COALESCE($3, ''))
+		LIMIT 1
+	`, name, address, city).Scan(&id)
+	if err != nil {
+		return nil, err
+	}
+	return r.GetByID(id)
+}
+
 func (r *PlaceRepo) Update(p *model.Place, categoryIDs []int) (*model.Place, error) {
 	tx, err := r.db.Begin()
 	if err != nil {
@@ -430,6 +474,10 @@ func (r *PlaceRepo) Update(p *model.Place, categoryIDs []int) (*model.Place, err
 		WHERE id=$9
 	`, p.Name, p.Address, p.City, p.Lat, p.Lng, p.CuisineTypeID, p.Website, p.ImageURL, p.ID)
 	if err != nil {
+		// Переименование в уже существующее место (тот же name+address+city).
+		if isUniqueViolation(err) {
+			return nil, &DuplicatePlaceError{}
+		}
 		return nil, err
 	}
 
