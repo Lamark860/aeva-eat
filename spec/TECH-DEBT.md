@@ -39,6 +39,13 @@
   предупреждения** (`001_init.sql` CASCADE, `place.go:Delete` голый DELETE).
   Файлы в `/uploads` остаются сиротами. → confirm с числом отзывов + мягкое
   удаление; чистить файлы.
+- **🔸 [ops] Авто-деплой после auto-merge молча не срабатывает.** `automerge.yml`
+  мержит дефолтным `GITHUB_TOKEN` (секрет `GH_PAT` не задан), а GitHub не
+  триггерит workflow на push от `github-actions[bot]` (защита от рекурсии).
+  Итог: PR смержился в master, но `deploy.yml` не запустился — прод остался на
+  старом коде, пока не дёрнешь `workflow_dispatch` руками (так и было 2026-06-05).
+  → завести `GH_PAT` (repo→Settings→Secrets) или сделать deploy явно зависимым от
+  события merge, либо оставить деплой только ручным/по тегу.
 - **🔸 [ops] Авто-конвейер dev→master→прод без апрува и без теста миграций.**
   `automerge.yml`/`deploy.yml`; CI гоняет только vet/build/unit. Сломанная
   миграция уезжает на живую БД, откат forward-only. → job с поднятием postgres и
