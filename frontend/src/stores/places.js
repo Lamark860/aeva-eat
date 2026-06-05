@@ -85,9 +85,22 @@ export const usePlacesStore = defineStore('places', () => {
   }
 
   async function createPlace(placeData) {
-    const { data } = await http.post('/places', placeData)
-    places.value.unshift(data)
-    return data
+    try {
+      const { data } = await http.post('/places', placeData)
+      places.value.unshift(data)
+      return data
+    } catch (e) {
+      // 409 = совпала идентичность (то же название+адрес+город). Пробрасываем
+      // существующее место наверх, чтобы форма предложила «перейти и оставить
+      // отзыв» вместо глухой ошибки.
+      if (e.response?.status === 409) {
+        const dup = new Error('duplicate')
+        dup.duplicate = true
+        dup.existing = e.response.data?.existing || null
+        throw dup
+      }
+      throw e
+    }
   }
 
   async function updatePlace(id, placeData) {

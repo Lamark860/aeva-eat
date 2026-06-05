@@ -2,8 +2,10 @@ package handler
 
 import (
 	"crypto/rand"
+	"database/sql"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strconv"
 
@@ -106,14 +108,18 @@ func (h *InviteHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Check that the user owns this invite or is superuser
 	user, _ := h.userRepo.GetByID(userID)
 	if user == nil {
 		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
 		return
 	}
 
-	if err := h.inviteRepo.Delete(id); err != nil {
+	// Удалить может только создатель инвайта или superuser — иначе IDOR.
+	if err := h.inviteRepo.Delete(id, userID, user.Role == "superuser"); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			writeJSON(w, http.StatusForbidden, map[string]string{"error": "you can only delete your own invites"})
+			return
+		}
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to delete invite"})
 		return
 	}

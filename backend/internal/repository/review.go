@@ -166,13 +166,17 @@ func (r *ReviewRepo) Create(rv *model.Review, authorIDs []int) (*model.Review, e
 	return r.GetByID(rv.ID)
 }
 
+// Update меняет только редактируемые из формы поля (оценки/коммент/визит/гем).
+// image_url и video_url НЕ трогаем: они управляются отдельными upload-эндпоинтами
+// (UploadVideo/AddPhoto), и форма правки их не присылает. Раньше они затирались
+// в NULL при правке текста — медиа молча терялось, файл оставался сиротой.
 func (r *ReviewRepo) Update(rv *model.Review) (*model.Review, error) {
 	_, err := r.db.Exec(`
 		UPDATE reviews SET food_rating=$1, service_rating=$2, vibe_rating=$3,
-			is_gem=$4, comment=$5, image_url=$6, video_url=$7, visited_at=$8, updated_at=now()
-		WHERE id=$9
+			is_gem=$4, comment=$5, visited_at=$6, updated_at=now()
+		WHERE id=$7
 	`, rv.FoodRating, rv.ServiceRating, rv.VibeRating,
-		rv.IsGem, rv.Comment, rv.ImageURL, rv.VideoURL, rv.VisitedAt, rv.ID)
+		rv.IsGem, rv.Comment, rv.VisitedAt, rv.ID)
 	if err != nil {
 		return nil, err
 	}
