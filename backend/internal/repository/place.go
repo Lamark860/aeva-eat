@@ -549,6 +549,25 @@ func (r *PlaceRepo) UpdateImageURL(placeID int, imageURL string) error {
 	return err
 }
 
+// CanonicalCity возвращает уже существующее написание города (case-insensitive
+// совпадение), чтобы «москва»/«Москва»/«МОСКВА» схлопывались в одну запись на
+// полке «По городам» (которая группирует по точной строке p.city). Если такого
+// города ещё нет — возвращает вход как есть. Вход ожидается уже TrimSpace'нутым.
+func (r *PlaceRepo) CanonicalCity(city string) string {
+	if city == "" {
+		return ""
+	}
+	var existing string
+	err := r.db.QueryRow(
+		`SELECT city FROM places WHERE LOWER(city) = LOWER($1) AND city IS NOT NULL
+		 ORDER BY id ASC LIMIT 1`, city,
+	).Scan(&existing)
+	if err == nil && existing != "" {
+		return existing
+	}
+	return city
+}
+
 func (r *PlaceRepo) ListCities() ([]string, error) {
 	rows, err := r.db.Query(`SELECT DISTINCT city FROM places WHERE city IS NOT NULL AND city != '' ORDER BY city`)
 	if err != nil {
