@@ -43,6 +43,32 @@ func (h *PlaceHandler) canMutatePlace(userID, ownerID int) bool {
 	return err == nil && u != nil && u.Role == "superuser"
 }
 
+// trimToNil — TrimSpace; пустую строку превращает в nil (не храним "").
+func trimToNil(s *string) *string {
+	if s == nil {
+		return nil
+	}
+	t := strings.TrimSpace(*s)
+	if t == "" {
+		return nil
+	}
+	return &t
+}
+
+// normalizePlaceReq чистит пользовательский ввод перед сохранением: тримит
+// поля и приводит город к каноническому написанию существующего (чтобы полка
+// «По городам» не дробилась на «Москва»/«москва»).
+func (h *PlaceHandler) normalizePlaceReq(req *createPlaceRequest) {
+	req.Name = strings.TrimSpace(req.Name)
+	req.Address = trimToNil(req.Address)
+	req.City = trimToNil(req.City)
+	req.Website = trimToNil(req.Website)
+	if req.City != nil && h.placeRepo != nil {
+		c := h.placeRepo.CanonicalCity(*req.City)
+		req.City = &c
+	}
+}
+
 type createPlaceRequest struct {
 	Name          string   `json:"name"`
 	Address       *string  `json:"address,omitempty"`
@@ -171,6 +197,7 @@ func (h *PlaceHandler) Create(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
 		return
 	}
+	h.normalizePlaceReq(&req)
 	if req.Name == "" {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "name is required"})
 		return
@@ -234,6 +261,7 @@ func (h *PlaceHandler) Update(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
 		return
 	}
+	h.normalizePlaceReq(&req)
 	if req.Name == "" {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "name is required"})
 		return
