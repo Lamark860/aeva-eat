@@ -130,10 +130,8 @@
           ✎ оставить отзыв
         </button>
 
-        <template v-if="isOwner">
-          <router-link :to="`/places/${place.id}/edit`" class="cta-link">ред. место</router-link>
-          <button class="cta-link danger" @click="handleDelete">удалить</button>
-        </template>
+        <router-link v-if="auth.isAuthenticated" :to="`/places/${place.id}/edit`" class="cta-link">ред. место</router-link>
+        <button v-if="canDelete" class="cta-link danger" @click="handleDelete">в архив</button>
       </section>
 
       <!-- Mini map -->
@@ -247,6 +245,8 @@ function onEdit(rv) {
 
 const place = computed(() => placesStore.currentPlace)
 const isOwner = computed(() => auth.user && place.value && place.value.created_by === auth.user.id)
+// Удалять (в архив) может создатель или superuser; редактировать — любой из круга.
+const canDelete = computed(() => isOwner.value || auth.user?.role === 'superuser')
 const hasMap = computed(() => place.value && place.value.lat && place.value.lng)
 
 const overallRating = computed(() => {
@@ -386,17 +386,14 @@ async function handleDeleteReview(id) {
 }
 
 async function handleDelete() {
-  const n = place.value?.review_count || 0
-  const msg = n > 0
-    ? `Удалить заведение? Вместе с ним удалятся ${n} ${reviewsLabel.value} от круга — это необратимо.`
-    : 'Удалить заведение?'
-  if (!confirm(msg)) return
+  // Мягкое удаление: место уходит в архив, отзывы/фото круга сохраняются.
+  if (!confirm('Убрать заведение в архив? Оно исчезнет из списков и с карты, но отзывы и фото круга сохранятся. Вернуть сможет администратор.')) return
   try {
     await placesStore.deletePlace(place.value.id)
-    toast.info('Заведение удалено')
+    toast.info('Заведение убрано в архив')
     router.push('/places')
   } catch (e) {
-    toast.error(e.response?.data?.error || 'Не удалось удалить заведение')
+    toast.error(e.response?.data?.error || 'Не удалось убрать заведение')
   }
 }
 

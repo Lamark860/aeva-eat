@@ -18,7 +18,7 @@ jobs:
     if: github.event.pull_request.head.ref == 'dev' && github.event.pull_request.draft == false
     runs-on: ubuntu-latest
     steps:
-      - name: Enable auto-merge (squash)
+      - name: Enable auto-merge (rebase)
         env:
           # ВАЖНО: нужен PAT реального пользователя (secrets.GH_PAT).
           # Если включить auto-merge через дефолтный GITHUB_TOKEN, итоговый
@@ -26,6 +26,10 @@ jobs:
           # deploy.yml (защита от рекурсии workflow). С PAT push атрибутируется
           # пользователю и deploy триггерится. Подробности — в
           # _local_docs/internal/deploy/auto-deploy.md.
+          #
+          # --rebase (а не --squash): master перематывается к коммитам dev один-в-
+          # один, dev и master не расходятся по SHA, и каждый следующий PR из dev
+          # не конфликтует (squash порождал древний merge-base и DIRTY-PR).
           GH_TOKEN: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
           PR_URL: ${{ github.event.pull_request.html_url }}
-        run: gh pr merge --auto --squash "$PR_URL"
+        run: gh pr merge --auto --rebase "$PR_URL"

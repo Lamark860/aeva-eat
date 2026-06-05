@@ -38,6 +38,23 @@ func (r *WishlistRepo) MarkStruck(userID, placeID int) (bool, error) {
 	return n > 0, nil
 }
 
+// MarkStruckByPlace зачёркивает ВСЕ записи общего wishlist для места: фича
+// «исполнение желания» круговая — место посетил кто угодно из круга → записка
+// зачёркивается у всех (spec/product.md §Wishlist на доске). Возвращает число
+// затронутых записей.
+func (r *WishlistRepo) MarkStruckByPlace(placeID int) (int64, error) {
+	res, err := r.db.Exec(`
+		UPDATE wishlists
+		   SET is_struck = TRUE, struck_at = COALESCE(struck_at, now())
+		 WHERE place_id = $1 AND is_struck = FALSE
+	`, placeID)
+	if err != nil {
+		return 0, err
+	}
+	n, _ := res.RowsAffected()
+	return n, nil
+}
+
 // ListAll — общий wishlist круга (backend.md §Wishlist). Свежие сверху,
 // зачёркнутые в конце (внутри своих групп — по дате).
 func (r *WishlistRepo) ListAll() ([]model.WishlistEntry, error) {

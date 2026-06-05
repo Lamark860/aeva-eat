@@ -25,8 +25,8 @@ func (h *AggregateHandler) loadPlaces(ids []int) []model.Place {
 	out := make([]model.Place, 0, len(ids))
 	for _, id := range ids {
 		p, err := h.place.GetByID(id)
-		if err != nil || p == nil {
-			continue
+		if err != nil || p == nil || p.DeletedAt != nil {
+			continue // пропускаем недоступные и архивированные (soft-deleted)
 		}
 		out = append(out, *p)
 	}

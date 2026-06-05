@@ -137,13 +137,11 @@ func (h *ReviewHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// backend.md §Wishlist: при создании review у соавторов, у которых это
-	// место было в wishlist, ставим struck=true. Best-effort — ошибки не
-	// фейлят основной запрос; review уже создан.
+	// Место посещено кругом → зачёркиваем общий wishlist у ВСЕХ, кто планировал
+	// сюда (фича «исполнение желания» круговая, spec/product.md): визит кем угодно
+	// гасит записку у всех. Best-effort — ошибки не фейлят основной запрос.
 	if h.wishlistRepo != nil {
-		for _, uid := range authorIDs {
-			_, _ = h.wishlistRepo.MarkStruck(uid, placeID)
-		}
+		_, _ = h.wishlistRepo.MarkStruckByPlace(placeID)
 	}
 
 	writeJSON(w, http.StatusCreated, created)

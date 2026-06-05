@@ -88,7 +88,8 @@ func (r *PlaceRepo) List(f PlaceFilter) (*PlaceListResult, error) {
 		) rs ON rs.place_id = p.id
 	`
 
-	var conditions []string
+	// Базовое условие: показываем только активные (не soft-deleted) места.
+	conditions := []string{"p.deleted_at IS NULL"}
 	var args []interface{}
 	argIdx := 1
 
@@ -358,6 +359,11 @@ func (r *PlaceRepo) GetByID(id int) (*model.Place, error) {
 		p.AvgVibe = &avgVibe
 	}
 
+	// deleted_at — для soft-delete: loadPlaces/share проверяют это поле, чтобы
+	// не показывать архивированные места (отдельным лёгким запросом, чтобы не
+	// трогать общий SELECT/Scan, идентичный в List).
+	_ = r.db.QueryRow(`SELECT deleted_at FROM places WHERE id = $1`, id).Scan(&p.DeletedAt)
+
 	// Load categories
 	rows, err := r.db.Query(
 		`SELECT c.name FROM categories c JOIN place_categories pc ON pc.category_id = c.id WHERE pc.place_id = $1`, id)
@@ -503,8 +509,23 @@ func (r *PlaceRepo) Update(p *model.Place, categoryIDs []int) (*model.Place, err
 	return r.GetByID(p.ID)
 }
 
+// Delete — физическое удаление (каскадит отзывы/фото). Используется только для
+// будущего superuser-purge; обычное удаление мест теперь мягкое (SoftDelete).
 func (r *PlaceRepo) Delete(id int) error {
 	_, err := r.db.Exec(`DELETE FROM places WHERE id = $1`, id)
+	return err
+}
+
+// SoftDelete архивирует место: скрывает из листингов/карты/поиска/рандома, но
+// отзывы/фото/видео круга сохраняются. No-op, если уже удалено.
+func (r *PlaceRepo) SoftDelete(id int) error {
+	_, err := r.db.Exec(`UPDATE places SET deleted_at = now(), updated_at = now() WHERE id = $1 AND deleted_at IS NULL`, id)
+	return err
+}
+
+// Restore снимает мягкое удаление (superuser).
+func (r *PlaceRepo) Restore(id int) error {
+	_, err := r.db.Exec(`UPDATE places SET deleted_at = NULL, updated_at = now() WHERE id = $1`, id)
 	return err
 }
 
@@ -590,7 +611,7 @@ func (r *PlaceRepo) ListCities() ([]string, error) {
 // > 0, исключает места, где этот пользователь уже оставил отзыв (B5: «мне
 // повезёт» с exclude_visited_by). Возвращает nil, nil если ничего не нашлось.
 func (r *PlaceRepo) Random(f PlaceFilter, excludeVisitedBy int) (*model.Place, error) {
-	var conditions []string
+	conditions := []string{"p.deleted_at IS NULL"}
 	var args []any
 	argIdx := 1
 

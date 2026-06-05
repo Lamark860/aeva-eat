@@ -62,6 +62,9 @@ type Place struct {
 	RatingsPerUser []RatingsPerUser `json:"ratings_per_user,omitempty"`
 	CreatedAt      time.Time        `json:"created_at"`
 	UpdatedAt      time.Time        `json:"updated_at"`
+	// DeletedAt — мягкое удаление (архив). nil = активно. Заполняется только в
+	// GetByID; листинги/рандом исключают удалённые на уровне SQL.
+	DeletedAt *time.Time `json:"deleted_at,omitempty"`
 }
 
 // GemStatus — кто первый отметил место жемчужиной + остальные «подписавшиеся».

@@ -123,6 +123,8 @@ func main() {
 			r.Post("/", placeHandler.Create)
 			r.Put("/{id}", placeHandler.Update)
 			r.Delete("/{id}", placeHandler.Delete)
+			r.Post("/{id}/restore", placeHandler.Restore) // superuser
+
 			r.Post("/{id}/image", placeHandler.UploadImage)
 			r.Post("/{id}/reviews", reviewHandler.Create)
 			r.Put("/{id}/reviews/{rid}", reviewHandler.Update)
@@ -235,6 +237,7 @@ func runMigrations(db *sql.DB) error {
 		"migrations/014_feed_unread.up.sql",
 		"migrations/015_wishlist_struck.up.sql",
 		"migrations/016_place_identity.up.sql",
+		"migrations/017_place_soft_delete.up.sql",
 		// ВНИМАНИЕ: 005_seed_data — это ДЕМО-данные, не схема. Раньше он стоял
 		// здесь и прогонялся при каждом старте; т.к. wishlist_custom не имеет
 		// уникального индекса, ON CONFLICT не срабатывал и записи плодились

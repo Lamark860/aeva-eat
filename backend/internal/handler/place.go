@@ -234,8 +234,7 @@ func (h *PlaceHandler) Create(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *PlaceHandler) Update(w http.ResponseWriter, r *http.Request) {
-	userID, ok := middleware.GetUserID(r)
-	if !ok {
+	if _, ok := middleware.GetUserID(r); !ok {
 		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
 		return
 	}
@@ -246,13 +245,10 @@ func (h *PlaceHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ownerID, err := h.placeRepo.GetOwnerID(id)
-	if err != nil {
+	// Места общие на круг — редактировать (название/адрес/кухню/фото) может любой
+	// авторизованный участник. Удаление при этом остаётся за создателем/superuser.
+	if _, err := h.placeRepo.GetOwnerID(id); err != nil {
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "place not found"})
-		return
-	}
-	if !h.canMutatePlace(userID, ownerID) {
-		writeJSON(w, http.StatusForbidden, map[string]string{"error": "you can only edit your own places"})
 		return
 	}
 
@@ -322,19 +318,39 @@ func (h *PlaceHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Собираем пути к файлам ДО удаления (DB-каскад снесёт отзывы/фото-строки,
-	// но не файлы на диске — иначе они останутся сиротами в /uploads).
-	paths, _ := h.placeRepo.CollectUploadPaths(id)
-
-	if err := h.placeRepo.Delete(id); err != nil {
+	// Мягкое удаление: место уходит в архив, отзывы/фото/видео круга сохраняются
+	// (никто не теряет воспоминания одним тапом). superuser может вернуть через
+	// POST /api/places/{id}/restore. CollectUploadPaths/Delete (hard) оставлены
+	// для будущего superuser-purge.
+	if err := h.placeRepo.SoftDelete(id); err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to delete place"})
 		return
 	}
+	writeJSON(w, http.StatusOK, map[string]string{"status": "archived"})
+}
 
-	for _, p := range paths {
-		removeUploaded(p) // best-effort, helper из review.go (тот же пакет)
+// Restore — POST /api/places/{id}/restore. Снимает мягкое удаление. Superuser only.
+func (h *PlaceHandler) Restore(w http.ResponseWriter, r *http.Request) {
+	userID, ok := middleware.GetUserID(r)
+	if !ok {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+		return
 	}
-	writeJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
+	u, err := h.userRepo.GetByID(userID)
+	if err != nil || u == nil || u.Role != "superuser" {
+		writeJSON(w, http.StatusForbidden, map[string]string{"error": "superuser access required"})
+		return
+	}
+	id, err := strconv.Atoi(chi.URLParam(r, "id"))
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid place id"})
+		return
+	}
+	if err := h.placeRepo.Restore(id); err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to restore place"})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"status": "restored"})
 }
 
 func (h *PlaceHandler) ListCities(w http.ResponseWriter, r *http.Request) {
@@ -388,8 +404,7 @@ func (h *PlaceHandler) Random(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *PlaceHandler) UploadImage(w http.ResponseWriter, r *http.Request) {
-	userID, ok := middleware.GetUserID(r)
-	if !ok {
+	if _, ok := middleware.GetUserID(r); !ok {
 		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
 		return
 	}
@@ -400,13 +415,9 @@ func (h *PlaceHandler) UploadImage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ownerID, err := h.placeRepo.GetOwnerID(id)
-	if err != nil {
+	// Фото места — часть редактирования общего места: доступно любому участнику.
+	if _, err := h.placeRepo.GetOwnerID(id); err != nil {
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "place not found"})
-		return
-	}
-	if !h.canMutatePlace(userID, ownerID) {
-		writeJSON(w, http.StatusForbidden, map[string]string{"error": "you can only upload images for your own places"})
 		return
 	}
 
