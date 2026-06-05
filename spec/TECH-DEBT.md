@@ -44,6 +44,15 @@
 | Поиск по name+city+cuisine | `repository/place.go` List | строка поиска ищет по названию, городу и кухне (как обещает плейсхолдер) |
 | Сохранение `website` | `views/PlaceForm.vue` | сайт из Яндекс-подсказки и ручного поля теперь пишется (раньше терялся) |
 
+### ✅ Исправлено — батч 4 (2026-06-05)
+
+| Что | Где | Суть |
+|---|---|---|
+| Канонизация города | `handler/place.go` `normalizePlaceReq`, `repository/place.go` `CanonicalCity` | trim + приведение к существующему написанию → полка «По городам» не дробится на «Москва»/«москва» |
+| Trim полей места | `handler/place.go` | name/address/city/website тримятся на сохранении (меньше дублей с хвостовыми пробелами) |
+| Backend healthcheck в compose | `docker-compose.prod.yml` | `wget /api/health` + nginx ждёт `service_healthy` (раньше стартовал раньше готовности бэка → 502) |
+| Удалён мёртвый `VideoKruzhok.vue` | `components/scrapbook/` | не использовался нигде |
+
 ---
 
 ## 🔸 Открытый тех-долг (по убыванию приоритета)
@@ -86,8 +95,9 @@
   `ReadHeaderTimeout`/`IdleTimeout`; батч 3: `MaxBytesReader` 1 MB на JSON).
 - **✅ [security] Rate-limit СДЕЛАН (батч 3)** — login/register 20/min по IP,
   suggest 60/min по userID (`middleware/ratelimit.go`, in-memory token-bucket).
-- **🔸 [product] Город — свободный текст без нормализации** → полка «По городам»
-  дробится («Москва»/«москва»/«Moscow»). → canonical-case/справочник.
+- **✅ [product] Город — канонизация СДЕЛАНА (батч 4)** (`CanonicalCity`: приведение
+  к существующему написанию + trim). Полка «По городам» больше не дробится по
+  регистру. Осталось 🔸 (опц.): справочник/автокомплит городов, rename города.
 - **🔸 [product/bug] Wishlist «исполнение желания» не срабатывает, если место
   посетил не автор плана** (`MarkStruck` бьёт только по `user_id` визита), хотя
   `product.md` описывает фичу как круговую. → struck по факту визита кем угодно.
@@ -106,8 +116,8 @@
 - 🔸 [data-model] Громоздкий place-SELECT продублирован 4× (List/GetByID/wishlist) и уже разошёлся по полям.
 - 🔸 [backend] ~~Правка заметки без лимита длины~~ (✅ батч 2: лимит 2000 в Update); осталось: гонка TOCTOU на лимите 5 фото; review Update/Delete не сверяет `place_id` из URL.
 - 🔸 [security] CORS `*` + `AllowCredentials:true` (инертно — токен в заголовке); публичная перечислимая `/p/:id` (перебор id выгружает каталог) → шарить по UUID.
-- 🔸 [ops] Нет лимитов ресурсов и ротации docker-логов на общем VPS; у backend нет healthcheck в compose; деплой `git reset --hard` на проде.
-- 🔸 [frontend] Разнобой копирайта «место/заведение/location»; мёртвый `VideoKruzhok.vue`; Bootstrap + кастомный scrapbook-CSS дублируются.
+- 🔸 [ops] Нет лимитов ресурсов и ротации docker-логов на общем VPS; деплой `git reset --hard` на проде. (✅ батч 4: backend healthcheck в compose + nginx ждёт healthy)
+- 🔸 [frontend] Разнобой копирайта «место/заведение/location»; Bootstrap + кастомный scrapbook-CSS дублируются. (✅ батч 4: мёртвый `VideoKruzhok.vue` удалён)
 - 🔸 [tech-debt] `feed_events` покрывает только review+note; лента склеивается на клиенте из 3 запросов вместо единого `/feed`.
 
 ---
