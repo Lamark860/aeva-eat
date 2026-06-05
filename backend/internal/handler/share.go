@@ -42,8 +42,8 @@ func (h *ShareHandler) Render(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	p, err := h.placeRepo.GetByID(id)
-	if err != nil || p == nil {
-		http.NotFound(w, r)
+	if err != nil || p == nil || p.DeletedAt != nil {
+		http.NotFound(w, r) // нет места или архивировано (soft-deleted)
 		return
 	}
 
