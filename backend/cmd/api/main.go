@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/aeva-eat/backend/internal/config"
 	"github.com/aeva-eat/backend/internal/handler"
@@ -57,7 +58,7 @@ func main() {
 
 	// Handlers
 	authHandler := handler.NewAuthHandler(authService)
-	placeHandler := handler.NewPlaceHandler(placeRepo)
+	placeHandler := handler.NewPlaceHandler(placeRepo, userRepo)
 	catalogHandler := handler.NewCatalogHandler(catalogRepo)
 	reviewHandler := handler.NewReviewHandler(reviewRepo, wishlistRepo)
 	wishlistHandler := handler.NewWishlistHandler(wishlistRepo)
@@ -198,7 +199,15 @@ func main() {
 
 	addr := fmt.Sprintf(":%s", cfg.APIPort)
 	log.Printf("starting server on %s", addr)
-	if err := http.ListenAndServe(addr, r); err != nil {
+	// ReadHeaderTimeout защищает от Slowloris (медленные заголовки), не ограничивая
+	// время заливки тела — иначе оборвутся 20MB-видео на медленном мобильном.
+	srv := &http.Server{
+		Addr:              addr,
+		Handler:           r,
+		ReadHeaderTimeout: 10 * time.Second,
+		IdleTimeout:       120 * time.Second,
+	}
+	if err := srv.ListenAndServe(); err != nil {
 		log.Fatalf("server error: %v", err)
 	}
 }

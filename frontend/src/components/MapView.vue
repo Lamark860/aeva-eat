@@ -1,5 +1,10 @@
 <template>
-  <div ref="mapContainer" class="sb-map" :style="{ height: height }"></div>
+  <div
+    v-if="mapUnavailable"
+    class="sb-map sb-map-unavailable"
+    :style="{ height: height }"
+  >🗺️ карта недоступна</div>
+  <div v-else ref="mapContainer" class="sb-map" :style="{ height: height }"></div>
 </template>
 
 <script setup>
@@ -19,6 +24,7 @@ const props = defineProps({
 defineEmits(['marker-click'])
 
 const mapContainer = ref(null)
+const mapUnavailable = ref(false)
 let map = null
 let placemarks = []
 let clusterer = null
@@ -317,6 +323,10 @@ function updateMarkers() {
 }
 
 onMounted(() => {
+  if (typeof ymaps === 'undefined' || window.__ymapsFailed) {
+    mapUnavailable.value = true
+    return
+  }
   ymaps.ready(() => {
     map = new ymaps.Map(mapContainer.value, {
       center: props.center,
@@ -351,5 +361,14 @@ onUnmounted(() => {
   box-shadow:
     0 1px 1px rgba(40, 30, 20, 0.06),
     0 4px 14px rgba(40, 30, 20, 0.07);
+}
+.sb-map-unavailable {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #faf8f4;
+  color: #7a6a5c;
+  font-family: var(--sb-hand, cursive);
+  font-size: 1rem;
 }
 </style>

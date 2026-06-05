@@ -21,10 +21,26 @@ import (
 
 type PlaceHandler struct {
 	placeRepo *repository.PlaceRepo
+	userRepo  *repository.UserRepo
 }
 
-func NewPlaceHandler(placeRepo *repository.PlaceRepo) *PlaceHandler {
-	return &PlaceHandler{placeRepo: placeRepo}
+func NewPlaceHandler(placeRepo *repository.PlaceRepo, userRepo *repository.UserRepo) *PlaceHandler {
+	return &PlaceHandler{placeRepo: placeRepo, userRepo: userRepo}
+}
+
+// canMutatePlace — место может править/удалять его создатель ИЛИ superuser.
+// Места общие на круг, поэтому superuser должен мочь чинить/убирать чужие
+// карточки (и осиротевшие с created_by IS NULL). userRepo может быть nil в
+// юнит-тестах — тогда работает только проверка владения.
+func (h *PlaceHandler) canMutatePlace(userID, ownerID int) bool {
+	if ownerID == userID {
+		return true
+	}
+	if h.userRepo == nil {
+		return false
+	}
+	u, err := h.userRepo.GetByID(userID)
+	return err == nil && u != nil && u.Role == "superuser"
 }
 
 type createPlaceRequest struct {
@@ -208,7 +224,7 @@ func (h *PlaceHandler) Update(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "place not found"})
 		return
 	}
-	if ownerID != userID {
+	if !h.canMutatePlace(userID, ownerID) {
 		writeJSON(w, http.StatusForbidden, map[string]string{"error": "you can only edit your own places"})
 		return
 	}
@@ -273,14 +289,22 @@ func (h *PlaceHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "place not found"})
 		return
 	}
-	if ownerID != userID {
+	if !h.canMutatePlace(userID, ownerID) {
 		writeJSON(w, http.StatusForbidden, map[string]string{"error": "you can only delete your own places"})
 		return
 	}
 
+	// Собираем пути к файлам ДО удаления (DB-каскад снесёт отзывы/фото-строки,
+	// но не файлы на диске — иначе они останутся сиротами в /uploads).
+	paths, _ := h.placeRepo.CollectUploadPaths(id)
+
 	if err := h.placeRepo.Delete(id); err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to delete place"})
 		return
+	}
+
+	for _, p := range paths {
+		removeUploaded(p) // best-effort, helper из review.go (тот же пакет)
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
 }
@@ -353,7 +377,7 @@ func (h *PlaceHandler) UploadImage(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "place not found"})
 		return
 	}
-	if ownerID != userID {
+	if !h.canMutatePlace(userID, ownerID) {
 		writeJSON(w, http.StatusForbidden, map[string]string{"error": "you can only upload images for your own places"})
 		return
 	}
