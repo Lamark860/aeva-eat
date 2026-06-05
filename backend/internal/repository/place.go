@@ -279,19 +279,25 @@ func (r *PlaceRepo) List(f PlaceFilter) (*PlaceListResult, error) {
 		return nil, err
 	}
 
-	// Load reviewers for each place
-	for i := range places {
-		reviewers, err := r.getReviewers(places[i].ID)
+	// Reviewers + feedPhotos одним батч-запросом каждый (вместо N+1 цикла по
+	// местам) — главный листинг «Найти» был самым горячим путём.
+	if len(places) > 0 {
+		ids := make([]int, len(places))
+		for i := range places {
+			ids[i] = places[i].ID
+		}
+		reviewersByPlace, err := r.getReviewersBatch(ids)
 		if err != nil {
 			return nil, err
 		}
-		places[i].Reviewers = reviewers
-
-		photos, err := r.getFeedPhotos(places[i].ID)
+		photosByPlace, err := r.getFeedPhotosBatch(ids)
 		if err != nil {
 			return nil, err
 		}
-		places[i].FeedPhotos = photos
+		for i := range places {
+			places[i].Reviewers = reviewersByPlace[places[i].ID]
+			places[i].FeedPhotos = photosByPlace[places[i].ID]
+		}
 	}
 
 	return &PlaceListResult{Places: places, Total: total}, nil
@@ -786,6 +792,68 @@ func (r *PlaceRepo) getRatingsPerUser(placeID int) ([]model.RatingsPerUser, erro
 		out = append(out, r)
 	}
 	return out, rows.Err()
+}
+
+// getReviewersBatch — рецензенты сразу для набора мест (один запрос вместо N).
+func (r *PlaceRepo) getReviewersBatch(placeIDs []int) (map[int][]model.Reviewer, error) {
+	rows, err := r.db.Query(`
+		SELECT DISTINCT rv.place_id, u.id, u.username, u.avatar_url
+		FROM users u
+		JOIN review_authors ra ON ra.user_id = u.id
+		JOIN reviews rv ON rv.id = ra.review_id
+		WHERE rv.place_id = ANY($1)
+		ORDER BY rv.place_id, u.username
+	`, pq.Array(placeIDs))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	m := map[int][]model.Reviewer{}
+	for rows.Next() {
+		var pid int
+		var rev model.Reviewer
+		if err := rows.Scan(&pid, &rev.ID, &rev.Username, &rev.AvatarURL); err != nil {
+			return nil, err
+		}
+		m[pid] = append(m[pid], rev)
+	}
+	return m, rows.Err()
+}
+
+// getFeedPhotosBatch — до 5 фото на место сразу для набора мест. Per-place
+// LIMIT 5 реализован оконной функцией ROW_NUMBER (тот же порядок, что в
+// getFeedPhotos): свежие отзывы → внутри по position.
+func (r *PlaceRepo) getFeedPhotosBatch(placeIDs []int) (map[int][]model.ReviewPhoto, error) {
+	rows, err := r.db.Query(`
+		SELECT place_id, id, url, position FROM (
+			SELECT rv.place_id, rp.id, rp.url, rp.position,
+				ROW_NUMBER() OVER (
+					PARTITION BY rv.place_id
+					ORDER BY rv.created_at DESC, rv.id DESC, rp.position ASC, rp.id ASC
+				) AS rn
+			FROM review_photos rp
+			JOIN reviews rv ON rv.id = rp.review_id
+			WHERE rv.place_id = ANY($1)
+		) t
+		WHERE rn <= 5
+		ORDER BY place_id
+	`, pq.Array(placeIDs))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	m := map[int][]model.ReviewPhoto{}
+	for rows.Next() {
+		var pid int
+		var p model.ReviewPhoto
+		if err := rows.Scan(&pid, &p.ID, &p.URL, &p.Position); err != nil {
+			return nil, err
+		}
+		m[pid] = append(m[pid], p)
+	}
+	return m, rows.Err()
 }
 
 func (r *PlaceRepo) getReviewers(placeID int) ([]model.Reviewer, error) {
