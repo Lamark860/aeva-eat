@@ -58,8 +58,9 @@ docker compose up --build -d
 - `GET /api/places/cities` — список городов (уникальные)
 - `GET /api/places/:id` — деталь (+ `gem_status`, `attendance`, `ratings_per_user`)
 - `POST /api/places` — создать (auth). **Идентичность места = `name + address + city`** (уникальный индекс `idx_places_identity`, миграция 016). Разные филиалы сети (разный адрес) создаются нормально. На точный дубль → **`409 {error:"duplicate", existing:{…}}`** с телом уже существующего места, чтобы UI предложил перейти и оставить отзыв
-- `PUT /api/places/:id` — обновить (auth, owner; конфликт идентичности → `409`)
-- `DELETE /api/places/:id` — удалить (auth, owner). ⚠️ каскадно удаляет все отзывы/фото/видео места (см. `spec/TECH-DEBT.md`)
+- `PUT /api/places/:id` — обновить (auth, любой участник круга; конфликт идентичности → `409`)
+- `DELETE /api/places/:id` — мягкое удаление (архив; auth, создатель/superuser). Отзывы/фото/видео круга сохраняются
+- `POST /api/places/:id/restore` — вернуть место из архива (superuser)
 - `POST /api/places/:id/image` — загрузить фото (auth, owner, multipart/form-data, поле `image`)
 - `GET /api/random` — случайное место под фильтры (`?exclude_visited_by=me`)
 
