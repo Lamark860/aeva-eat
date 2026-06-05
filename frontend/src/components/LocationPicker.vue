@@ -7,6 +7,11 @@
         class="form-control"
         placeholder="Название заведения или адрес..."
         autocomplete="off"
+        role="combobox"
+        aria-controls="lp-suggest-list"
+        aria-autocomplete="list"
+        :aria-expanded="showDropdown && suggestions.length > 0"
+        :aria-activedescendant="activeIdx >= 0 ? `lp-opt-${activeIdx}` : undefined"
         @input="onInput"
         @keydown.enter.prevent="pickFirst"
         @keydown.down.prevent="moveDown"
@@ -14,12 +19,21 @@
         @blur="onBlur"
         @focus="showDropdown = suggestions.length > 0"
       />
-      <ul v-if="showDropdown && suggestions.length" class="suggest-dropdown">
+      <ul
+        v-if="showDropdown && suggestions.length"
+        id="lp-suggest-list"
+        class="suggest-dropdown"
+        role="listbox"
+        aria-label="Подсказки мест"
+      >
         <li
           v-for="(item, idx) in suggestions"
+          :id="`lp-opt-${idx}`"
           :key="idx"
           class="suggest-item"
           :class="{ active: idx === activeIdx }"
+          role="option"
+          :aria-selected="idx === activeIdx"
           @mousedown.prevent="pickItem(item)"
         >
           <span class="suggest-name">{{ item.name }}</span>
@@ -28,9 +42,9 @@
         </li>
       </ul>
       <small class="text-muted d-block mt-1">Начните вводить — появятся заведения и адреса. Или кликните по карте.</small>
-      <div v-if="suggestions.length === 0 && showDropdown" class="suggest-dropdown">
-        <li class="suggest-item text-muted">Ничего не найдено</li>
-      </div>
+      <ul v-if="suggestions.length === 0 && showDropdown" class="suggest-dropdown" role="listbox" aria-label="Подсказки мест">
+        <li class="suggest-item text-muted" role="option" aria-disabled="true">Ничего не найдено</li>
+      </ul>
     </div>
 
     <div v-if="mapUnavailable" class="map-unavailable">

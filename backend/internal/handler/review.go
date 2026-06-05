@@ -2,6 +2,7 @@ package handler
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"mime/multipart"
@@ -311,8 +312,12 @@ func (h *ReviewHandler) UploadImage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if _, err := h.reviewRepo.AddPhoto(reviewID, url); err != nil {
+	if _, err := h.reviewRepo.AddPhoto(reviewID, url, maxPhotosPerReview); err != nil {
 		removeUploaded(url)
+		if errors.Is(err, repository.ErrPhotoLimit) {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": fmt.Sprintf("review already has %d photos", maxPhotosPerReview)})
+			return
+		}
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to save photo"})
 		return
 	}
@@ -387,10 +392,14 @@ func (h *ReviewHandler) UploadPhotos(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, perr.statusCode(), map[string]string{"error": perr.Error()})
 			return
 		}
-		photo, dberr := h.reviewRepo.AddPhoto(reviewID, url)
+		photo, dberr := h.reviewRepo.AddPhoto(reviewID, url, maxPhotosPerReview)
 		if dberr != nil {
 			removeUploaded(url)
 			rollbackPhotos(h, urls, created)
+			if errors.Is(dberr, repository.ErrPhotoLimit) {
+				writeJSON(w, http.StatusBadRequest, map[string]string{"error": fmt.Sprintf("max %d photos per review", maxPhotosPerReview)})
+				return
+			}
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to save photo"})
 			return
 		}
