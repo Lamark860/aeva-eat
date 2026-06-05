@@ -503,6 +503,37 @@ func (r *PlaceRepo) Delete(id int) error {
 	return err
 }
 
+// CollectUploadPaths собирает все URL загруженных файлов места (обложка места +
+// обложки/видео/фото всех его отзывов), чтобы хендлер мог удалить их с диска
+// перед каскадным удалением строк. Возвращает значения вида "/uploads/...".
+func (r *PlaceRepo) CollectUploadPaths(placeID int) ([]string, error) {
+	rows, err := r.db.Query(`
+		SELECT image_url FROM places  WHERE id = $1       AND image_url IS NOT NULL AND image_url <> ''
+		UNION ALL
+		SELECT image_url FROM reviews WHERE place_id = $1 AND image_url IS NOT NULL AND image_url <> ''
+		UNION ALL
+		SELECT video_url FROM reviews WHERE place_id = $1 AND video_url IS NOT NULL AND video_url <> ''
+		UNION ALL
+		SELECT rp.url FROM review_photos rp
+		  JOIN reviews rv ON rv.id = rp.review_id
+		 WHERE rv.place_id = $1 AND rp.url IS NOT NULL AND rp.url <> ''
+	`, placeID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var paths []string
+	for rows.Next() {
+		var p string
+		if err := rows.Scan(&p); err != nil {
+			return nil, err
+		}
+		paths = append(paths, p)
+	}
+	return paths, rows.Err()
+}
+
 func (r *PlaceRepo) GetOwnerID(placeID int) (int, error) {
 	var ownerID int
 	err := r.db.QueryRow(`SELECT COALESCE(created_by, 0) FROM places WHERE id = $1`, placeID).Scan(&ownerID)

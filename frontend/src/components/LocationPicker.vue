@@ -33,7 +33,10 @@
       </div>
     </div>
 
-    <div ref="mapEl" class="location-picker-map"></div>
+    <div v-if="mapUnavailable" class="map-unavailable">
+      🗺️ Карта недоступна — заполните адрес вручную ниже.
+    </div>
+    <div v-show="!mapUnavailable" ref="mapEl" class="location-picker-map"></div>
 
     <div v-if="modelValue.lat && modelValue.lng" class="mt-2 d-flex align-items-center gap-2">
       <span class="badge bg-light text-dark border">
@@ -61,7 +64,7 @@ const props = defineProps({
   }
 })
 
-const emit = defineEmits(['update:modelValue', 'address-found', 'place-found'])
+const emit = defineEmits(['update:modelValue', 'address-found', 'place-found', 'maps-unavailable'])
 
 const mapEl = ref(null)
 const searchQuery = ref('')
@@ -69,6 +72,8 @@ const resolvedAddress = ref('')
 const suggestions = ref([])
 const showDropdown = ref(false)
 const activeIdx = ref(-1)
+// Скрипт Яндекс.Карт мог не загрузиться (блокировщик/оффлайн/протухший ключ).
+const mapUnavailable = ref(false)
 
 let map = null
 let marker = null
@@ -266,6 +271,13 @@ function centerOnCity(city) {
 }
 
 onMounted(() => {
+  // Если внешний скрипт Яндекса не загрузился — не падаем с ReferenceError,
+  // а показываем fallback и просим родителя раскрыть ручной ввод.
+  if (typeof ymaps === 'undefined' || window.__ymapsFailed) {
+    mapUnavailable.value = true
+    emit('maps-unavailable')
+    return
+  }
   ymaps.ready(() => {
     const initLat = props.modelValue.lat || 55.7558
     const initLng = props.modelValue.lng || 37.6173
@@ -319,6 +331,15 @@ onUnmounted(() => {
   border-radius: 0.75rem;
   border: 2px solid #e0ddd9;
   z-index: 0;
+}
+.map-unavailable {
+  padding: 18px 16px;
+  border: 2px dashed #e0ddd9;
+  border-radius: 0.75rem;
+  background: #faf8f4;
+  color: #7a6a5c;
+  font-size: 0.9rem;
+  text-align: center;
 }
 
 /* Drop map height on mobile so the search input + suggestions fit above the fold */

@@ -42,6 +42,7 @@
             @update:model-value="onLocationChange"
             @address-found="onAddressFound"
             @place-found="onPlaceFound"
+            @maps-unavailable="showManual = true"
           />
         </div>
 

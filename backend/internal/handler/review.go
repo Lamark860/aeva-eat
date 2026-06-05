@@ -510,10 +510,26 @@ func (h *ReviewHandler) UploadVideo(w http.ResponseWriter, r *http.Request) {
 	}
 	defer file.Close()
 
-	ct := header.Header.Get("Content-Type")
-	ext, ok := allowedVideoTypes[ct]
-	if !ok {
+	if _, ok := allowedVideoTypes[header.Header.Get("Content-Type")]; !ok {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "only MP4 and WebM videos are allowed"})
+		return
+	}
+
+	// Заголовок Content-Type легко подделать — проверяем реальную сигнатуру по
+	// первым байтам и берём расширение из неё, а не из присланного заголовка.
+	head := make([]byte, 512)
+	n, rerr := io.ReadFull(file, head)
+	if rerr != nil && rerr != io.ErrUnexpectedEOF && rerr != io.EOF {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "failed to read file"})
+		return
+	}
+	ext, ok := allowedVideoTypes[http.DetectContentType(head[:n])]
+	if !ok {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "file content is not a valid MP4/WebM video"})
+		return
+	}
+	if _, err := file.Seek(0, io.SeekStart); err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to process video"})
 		return
 	}
 

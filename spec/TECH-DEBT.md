@@ -21,6 +21,20 @@
 | Fail-fast по `JWT_SECRET` | `config.go`, `cmd/api/main.go`, оба compose | В `APP_ENV=production` пустой/дефолтный секрет → отказ старта |
 | Скрипт бэкапа | `backend/scripts/backup.sh`, `DEPLOY.md` | Дамп БД + архив `uploads_data` + ротация; осталось повесить cron на проде |
 
+### ✅ Исправлено — батч 2 (2026-06-05)
+
+| Что | Где | Суть |
+|---|---|---|
+| Superuser-bypass на места | `handler/place.go` (`canMutatePlace`) | superuser может править/удалять/менять фото любого места (общие данные круга) |
+| Чистка файлов при удалении места | `handler/place.go` Delete, `repository/place.go` `CollectUploadPaths` | удаляются обложка места + фото/видео всех отзывов из `/uploads` (не сироты) |
+| Предупреждение при удалении места | `views/PlaceDetail.vue` | confirm показывает число отзывов круга, которые удалятся |
+| Guard загрузки `ymaps` + fallback | `index.html`, `LocationPicker.vue`, `MapView.vue`, `PlaceForm.vue` | при недоступном скрипте — сообщение + авто-раскрытие ручного ввода, без молчаливого пустого div |
+| Таймауты HTTP-сервера | `cmd/api/main.go` | `ReadHeaderTimeout`/`IdleTimeout` (Slowloris), не ограничивая заливку видео |
+| Таймаут+контекст suggest-прокси | `handler/suggest.go` | `http.Client{Timeout:5s}` + `NewRequestWithContext` |
+| Видео по сигнатуре, не по заголовку | `handler/review.go` UploadVideo | `http.DetectContentType` (magic bytes), расширение из реального типа |
+| Лимит длины при правке заметки | `handler/note.go` Update | 2000 симв., как в Create |
+| Обработка ошибок delete/wishlist | `views/PlaceDetail.vue` | try/catch + toast.error на удалении места/отзыва и toggle wishlist |
+
 ---
 
 ## 🔸 Открытый тех-долг (по убыванию приоритета)
@@ -30,23 +44,25 @@
 - **🔸 [ops] Бэкап на проде не на расписании.** Скрипт есть, но cron + off-site
   копию надо завести на VPS (`DEPLOY.md`). Пока не сделано — риск потери данных
   при отказе диска остаётся.
-- **🔸 [product] Общее место правит/удаляет только создатель, нет admin-bypass.**
-  `handler/place.go` Update/Delete/UploadImage проверяют только `ownerID==userID`.
-  Чужое место с опечаткой никто (даже superuser) не исправит; при `created_by=NULL`
-  место блокируется навсегда. Конфликт с философией «общая на круг» (`product.md`).
-  → дать superuser-оверрайд или разрешить редактирование любому из круга.
-- **🔸 [data-model] Удаление места каскадит чужие отзывы/фото/видео без
-  предупреждения** (`001_init.sql` CASCADE, `place.go:Delete` голый DELETE).
-  Файлы в `/uploads` остаются сиротами. → confirm с числом отзывов + мягкое
-  удаление; чистить файлы.
+- **✅→🔸 [product] Admin-bypass на места — СДЕЛАНО (батч 2).** superuser теперь
+  правит/удаляет/меняет фото любого места (`canMutatePlace`). Осталось 🔸: дать
+  обычному участнику круга править общие места (сейчас только создатель/superuser)
+  и переназначать `created_by` при NULL.
+- **✅→🔸 [data-model] Каскадное удаление места — частично (батч 2).** Файлы
+  `/uploads` теперь чистятся (`CollectUploadPaths`), confirm показывает число
+  отзывов. Осталось 🔸: мягкое удаление/архив вместо физического DELETE, чтобы
+  чужой контент нельзя было снести безвозвратно одним тапом.
+- **🔸 [ops] Авто-деплой после auto-merge молча не срабатывает.** `automerge.yml`
+  мержит дефолтным `GITHUB_TOKEN` (секрет `GH_PAT` не задан), а GitHub не
+  триггерит workflow на push от `github-actions[bot]` (защита от рекурсии).
+  Итог: PR смержился в master, но `deploy.yml` не запустился — прод остался на
+  старом коде, пока не дёрнешь `workflow_dispatch` руками (так и было 2026-06-05).
+  → завести `GH_PAT` (repo→Settings→Secrets) или сделать deploy явно зависимым от
+  события merge, либо оставить деплой только ручным/по тегу.
 - **🔸 [ops] Авто-конвейер dev→master→прод без апрува и без теста миграций.**
   `automerge.yml`/`deploy.yml`; CI гоняет только vet/build/unit. Сломанная
   миграция уезжает на живую БД, откат forward-only. → job с поднятием postgres и
   прогоном `runMigrations`; ручной апрув (environment protection) на прод.
-- **🔸 [frontend] `ymaps` без проверки загрузки.** `index.html` без `onerror`,
-  `LocationPicker`/`MapView` дёргают глобальный `ymaps`. Блокировщик/оффлайн →
-  пустой div без сообщения, поиск молча мёртв. → guard + fallback на ручной ввод.
-
 ### Среднее
 
 - **🔸 [data-model] N+1 в листингах.** `aggregate.go:loadPlaces` зовёт
@@ -55,15 +71,12 @@
 - **🔸 [ops] Самописные миграции без леджера.** Хардкод-список в `main.go`,
   прогон на каждом старте, `*.down.sql` не применяются, идемпотентность вручную.
   → `golang-migrate`/`goose` или таблица `schema_migrations`.
-- **🔸 [backend] Suggest-прокси без таймаута/кэша** (`handler/suggest.go` —
-  `http.Get`, без `Context`/`Timeout`). Зависший Яндекс копит горутины; каждое
-  нажатие = платный вызов. → `http.Client{Timeout}`, кэш TTL, дебаунс.
-- **🔸 [backend] HTTP-сервер без таймаутов и без лимита тела** (`main.go`
-  `ListenAndServe`, нет `MaxBytesReader`). → `http.Server{ReadTimeout,…}`.
+- **✅→🔸 [backend] Suggest-прокси — таймаут СДЕЛАН (батч 2)** (`http.Client{Timeout:5s}`
+  + контекст). Осталось 🔸: in-memory кэш TTL + дебаунс на бэке.
+- **✅→🔸 [backend] HTTP-сервер — таймауты СДЕЛАНЫ (батч 2)** (`ReadHeaderTimeout`/
+  `IdleTimeout`). Осталось 🔸: `MaxBytesReader` на JSON-тело.
 - **🔸 [security] Нет rate-limit на `/login` `/register` `/suggest`** — брутфорс
   и слив квоты Яндекса. → `chi/httprate` или nginx `limit_req`.
-- **🔸 [backend] Загрузка видео доверяет `Content-Type`** без sniff magic-bytes
-  (`review.go:UploadVideo`, в отличие от картинок). → проверять сигнатуру.
 - **🔸 [product] Город — свободный текст без нормализации** → полка «По городам»
   дробится («Москва»/«москва»/«Moscow»). → canonical-case/справочник.
 - **🔸 [product/bug] Wishlist «исполнение желания» не срабатывает, если место
@@ -76,16 +89,16 @@
   `rating`/`url` доходят до фронта, но не сохраняются; `website` не пишется
   никогда. → прокинуть `website`, маппить категории; `uri` — задел под фазу 3
   идентичности (внешний org-id как ключ).
-- **🔸 [frontend] Непоследовательная обработка ошибок** — `handleDelete`/
-  `handleDeleteReview`/`wishlist.toggle` без `catch` → тихий провал. → единый
-  враппер с toast.
+- **✅→🔸 [frontend] Обработка ошибок — частично (батч 2).** `PlaceDetail`:
+  delete места/отзыва и toggle wishlist обёрнуты в try/catch + toast. Осталось
+  🔸: единый враппер мутаций (паттерн повторяется по views).
 - **🔸 [frontend] a11y подсказок `LocationPicker`** — невалидный HTML (`<li>` вне
   `<ul>`), нет `role`/`aria`. Образец рядом — `MultiSelect.vue`.
 
 ### Низкое
 
 - 🔸 [data-model] Громоздкий place-SELECT продублирован 4× (List/GetByID/wishlist) и уже разошёлся по полям.
-- 🔸 [backend] Правка заметки без лимита длины (в Create лимит есть); гонка TOCTOU на лимите 5 фото; review Update/Delete не сверяет `place_id` из URL.
+- 🔸 [backend] ~~Правка заметки без лимита длины~~ (✅ батч 2: лимит 2000 в Update); осталось: гонка TOCTOU на лимите 5 фото; review Update/Delete не сверяет `place_id` из URL.
 - 🔸 [security] CORS `*` + `AllowCredentials:true` (инертно — токен в заголовке); публичная перечислимая `/p/:id` (перебор id выгружает каталог) → шарить по UUID.
 - 🔸 [ops] Нет лимитов ресурсов и ротации docker-логов на общем VPS; у backend нет healthcheck в compose; деплой `git reset --hard` на проде.
 - 🔸 [frontend] Разнобой копирайта «место/заведение/location»; мёртвый `VideoKruzhok.vue`; Bootstrap + кастомный scrapbook-CSS дублируются.

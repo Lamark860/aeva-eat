@@ -113,7 +113,7 @@
           v-if="auth.isAuthenticated && !isOwner"
           class="cta-pin"
           :class="{ active: wishlist.isWishlisted(place.id) }"
-          @click="wishlist.toggle(place.id)"
+          @click="toggleWishlist"
         >
           <span class="head" aria-hidden="true"></span>
           <span class="lbl">{{ wishlist.isWishlisted(place.id) ? 'в&nbsp;планах' : 'в&nbsp;wishlist' }}</span>
@@ -366,18 +366,38 @@ async function handleUpdateReview(data) {
   await reviewsStore.fetchByPlace(route.params.id)
 }
 
+async function toggleWishlist() {
+  try {
+    await wishlist.toggle(place.value.id)
+  } catch (e) {
+    toast.error(e.response?.data?.error || 'Не удалось обновить wishlist')
+  }
+}
+
 async function handleDeleteReview(id) {
   if (!confirm('Удалить отзыв?')) return
-  await reviewsStore.deleteReview(place.value.id, id)
-  toast.info('Отзыв удалён')
-  await placesStore.fetchPlace(route.params.id)
+  try {
+    await reviewsStore.deleteReview(place.value.id, id)
+    toast.info('Отзыв удалён')
+    await placesStore.fetchPlace(route.params.id)
+  } catch (e) {
+    toast.error(e.response?.data?.error || 'Не удалось удалить отзыв')
+  }
 }
 
 async function handleDelete() {
-  if (!confirm('Удалить заведение?')) return
-  await placesStore.deletePlace(place.value.id)
-  toast.info('Заведение удалено')
-  router.push('/places')
+  const n = place.value?.review_count || 0
+  const msg = n > 0
+    ? `Удалить заведение? Вместе с ним удалятся ${n} ${reviewsLabel.value} от круга — это необратимо.`
+    : 'Удалить заведение?'
+  if (!confirm(msg)) return
+  try {
+    await placesStore.deletePlace(place.value.id)
+    toast.info('Заведение удалено')
+    router.push('/places')
+  } catch (e) {
+    toast.error(e.response?.data?.error || 'Не удалось удалить заведение')
+  }
 }
 
 onMounted(async () => {

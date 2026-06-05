@@ -122,6 +122,10 @@ func (h *NoteHandler) Update(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "text is required"})
 		return
 	}
+	if len(text) > 2000 {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "text too long (max 2000)"})
+		return
+	}
 
 	n := &model.Note{
 		ID:         id,
