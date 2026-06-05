@@ -91,6 +91,10 @@
                 <input v-model="form.address" type="text" class="form-control" placeholder="ул. Баумана, 1" />
               </div>
             </div>
+            <div class="mb-3">
+              <label class="form-label fw-medium">Сайт</label>
+              <input v-model="form.website" type="url" class="form-control" placeholder="https://..." />
+            </div>
           </div>
         </div>
 
@@ -219,6 +223,7 @@ const form = ref({
   name: '',
   city: '',
   address: '',
+  website: '',
   cuisine_type_ids: [],
   category_ids: [],
   lat: null,
@@ -234,6 +239,7 @@ onMounted(async () => {
       name: place.name,
       city: place.city || '',
       address: place.address || '',
+      website: place.website || '',
       cuisine_type_ids: place.cuisine_type_id ? [place.cuisine_type_id] : [],
       category_ids: place.category_ids || [],
       lat: place.lat || null,
@@ -262,6 +268,7 @@ function onPlaceFound(info) {
   if (info.name) form.value.name = info.name
   if (info.city) form.value.city = info.city
   if (info.address) form.value.address = info.address
+  if (info.url) form.value.website = info.url
   if (info.lat) form.value.lat = info.lat
   if (info.lng) form.value.lng = info.lng
   foundCategories.value = info.categories || []
@@ -289,6 +296,7 @@ async function handleSubmit() {
       name: form.value.name,
       address: form.value.address || undefined,
       city: form.value.city || undefined,
+      website: form.value.website || undefined,
       cuisine_type_id: form.value.cuisine_type_ids.length ? form.value.cuisine_type_ids[0] : undefined,
       category_ids: form.value.category_ids,
       lat: form.value.lat || undefined,

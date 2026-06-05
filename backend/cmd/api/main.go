@@ -81,6 +81,12 @@ func main() {
 		AllowCredentials: true,
 		MaxAge:           300,
 	}))
+	// Лимит JSON-тела (multipart-загрузки не трогает — у них свои лимиты).
+	r.Use(middleware.BodyLimit(1 << 20)) // 1 MB
+
+	// Rate-limit: брутфорс login/register по IP и слив квоты suggest по userID.
+	authLimiter := middleware.NewRateLimiter(20, 10, middleware.IPKey)
+	suggestLimiter := middleware.NewRateLimiter(60, 20, middleware.UserKey)
 
 	// Routes
 	r.Get("/api/health", func(w http.ResponseWriter, r *http.Request) {
@@ -89,8 +95,8 @@ func main() {
 	})
 
 	r.Route("/api/auth", func(r chi.Router) {
-		r.Post("/register", authHandler.Register)
-		r.Post("/login", authHandler.Login)
+		r.With(authLimiter.Handler).Post("/register", authHandler.Register)
+		r.With(authLimiter.Handler).Post("/login", authHandler.Login)
 		r.With(middleware.JWTAuth(cfg.JWTSecret)).Get("/me", authHandler.Me)
 		r.With(middleware.JWTAuth(cfg.JWTSecret)).Put("/password", authHandler.ChangePassword)
 		r.With(middleware.JWTAuth(cfg.JWTSecret)).Post("/avatar", authHandler.UploadAvatar)
@@ -183,7 +189,7 @@ func main() {
 		r.Get("/api/categories", catalogHandler.ListCategories)
 
 		// Geosuggest proxy
-		r.Get("/api/suggest", suggestHandler.Suggest)
+		r.With(suggestLimiter.Handler).Get("/api/suggest", suggestHandler.Suggest)
 
 		// Invites
 		r.Route("/api/invites", func(r chi.Router) {

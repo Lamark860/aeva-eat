@@ -35,6 +35,15 @@
 | Лимит длины при правке заметки | `handler/note.go` Update | 2000 симв., как в Create |
 | Обработка ошибок delete/wishlist | `views/PlaceDetail.vue` | try/catch + toast.error на удалении места/отзыва и toggle wishlist |
 
+### ✅ Исправлено — батч 3 (2026-06-05)
+
+| Что | Где | Суть |
+|---|---|---|
+| Rate-limit | `middleware/ratelimit.go`, `main.go` | in-memory token-bucket: login/register 20/min по IP, suggest 60/min по userID; без внешних зависимостей |
+| Лимит JSON-тела | `middleware.BodyLimit`, `main.go` | `MaxBytesReader` 1 MB на `application/json` (multipart-загрузки не трогает) |
+| Поиск по name+city+cuisine | `repository/place.go` List | строка поиска ищет по названию, городу и кухне (как обещает плейсхолдер) |
+| Сохранение `website` | `views/PlaceForm.vue` | сайт из Яндекс-подсказки и ручного поля теперь пишется (раньше терялся) |
+
 ---
 
 ## 🔸 Открытый тех-долг (по убыванию приоритета)
@@ -73,22 +82,19 @@
   → `golang-migrate`/`goose` или таблица `schema_migrations`.
 - **✅→🔸 [backend] Suggest-прокси — таймаут СДЕЛАН (батч 2)** (`http.Client{Timeout:5s}`
   + контекст). Осталось 🔸: in-memory кэш TTL + дебаунс на бэке.
-- **✅→🔸 [backend] HTTP-сервер — таймауты СДЕЛАНЫ (батч 2)** (`ReadHeaderTimeout`/
-  `IdleTimeout`). Осталось 🔸: `MaxBytesReader` на JSON-тело.
-- **🔸 [security] Нет rate-limit на `/login` `/register` `/suggest`** — брутфорс
-  и слив квоты Яндекса. → `chi/httprate` или nginx `limit_req`.
+- **✅ [backend] HTTP-сервер — таймауты + лимит тела СДЕЛАНЫ** (батч 2:
+  `ReadHeaderTimeout`/`IdleTimeout`; батч 3: `MaxBytesReader` 1 MB на JSON).
+- **✅ [security] Rate-limit СДЕЛАН (батч 3)** — login/register 20/min по IP,
+  suggest 60/min по userID (`middleware/ratelimit.go`, in-memory token-bucket).
 - **🔸 [product] Город — свободный текст без нормализации** → полка «По городам»
   дробится («Москва»/«москва»/«Moscow»). → canonical-case/справочник.
 - **🔸 [product/bug] Wishlist «исполнение желания» не срабатывает, если место
   посетил не автор плана** (`MarkStruck` бьёт только по `user_id` визита), хотя
   `product.md` описывает фичу как круговую. → struck по факту визита кем угодно.
-- **🔸 [product] Поиск ищет только по названию** (`place.go:List` — `LOWER(name)
-  LIKE`), хотя плейсхолдер обещает «место, кухня, город». → расширить на
-  city+cuisine (или сузить плейсхолдер).
-- **🔸 [frontend] Данные классификатора Яндекса теряются.** `uri`/`categories`/
-  `rating`/`url` доходят до фронта, но не сохраняются; `website` не пишется
-  никогда. → прокинуть `website`, маппить категории; `uri` — задел под фазу 3
-  идентичности (внешний org-id как ключ).
+- **✅ [product] Поиск по name+city+cuisine СДЕЛАН (батч 3)** (`place.go:List`).
+- **✅→🔸 [frontend] Классификатор Яндекса — `website` СДЕЛАН (батч 3).** Сайт
+  из подсказки/ручного поля теперь сохраняется. Осталось 🔸: маппить `categories`
+  в кухню/категории; `uri`/org-id — задел под фазу 3 идентичности места.
 - **✅→🔸 [frontend] Обработка ошибок — частично (батч 2).** `PlaceDetail`:
   delete места/отзыва и toggle wishlist обёрнуты в try/catch + toast. Осталось
   🔸: единый враппер мутаций (паттерн повторяется по views).
