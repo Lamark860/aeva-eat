@@ -2,10 +2,14 @@ package repository
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 
 	"github.com/aeva-eat/backend/internal/model"
 )
+
+// ErrPhotoLimit — превышен лимит фото на отзыв (проверяется атомарно в AddPhoto).
+var ErrPhotoLimit = errors.New("photo limit reached")
 
 type ReviewRepo struct {
 	db *sql.DB
@@ -244,12 +248,26 @@ func (r *ReviewRepo) CountPhotos(reviewID int) (int, error) {
 // AddPhoto добавляет фото в конец стопки. Возвращает созданную запись.
 // Если это первое фото и у отзыва нет image_url — синхронизирует image_url
 // для backwards-compat (cover-fallback в /api/places).
-func (r *ReviewRepo) AddPhoto(reviewID int, url string) (*model.ReviewPhoto, error) {
+func (r *ReviewRepo) AddPhoto(reviewID int, url string, maxPhotos int) (*model.ReviewPhoto, error) {
 	tx, err := r.db.Begin()
 	if err != nil {
 		return nil, err
 	}
 	defer tx.Rollback()
+
+	// Блокируем строку отзыва: сериализует параллельные добавления фото, иначе
+	// два одновременных запроса оба пройдут проверку и пробьют лимит (TOCTOU).
+	var rid int
+	if err := tx.QueryRow(`SELECT id FROM reviews WHERE id = $1 FOR UPDATE`, reviewID).Scan(&rid); err != nil {
+		return nil, err
+	}
+	var cnt int
+	if err := tx.QueryRow(`SELECT COUNT(*) FROM review_photos WHERE review_id = $1`, reviewID).Scan(&cnt); err != nil {
+		return nil, err
+	}
+	if cnt >= maxPhotos {
+		return nil, ErrPhotoLimit
+	}
 
 	var nextPos int
 	err = tx.QueryRow(
