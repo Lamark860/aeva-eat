@@ -53,6 +53,14 @@
 | Backend healthcheck в compose | `docker-compose.prod.yml` | `wget /api/health` + nginx ждёт `service_healthy` (раньше стартовал раньше готовности бэка → 502) |
 | Удалён мёртвый `VideoKruzhok.vue` | `components/scrapbook/` | не использовался нигде |
 
+### ✅ Исправлено — батч 5 (2026-06-05)
+
+| Что | Где | Суть |
+|---|---|---|
+| Кэш suggest (TTL 60s) | `handler/suggest.go` | повторные запросы автокомплита не бьют по платной квоте Яндекса |
+| review принадлежит place из URL | `handler/review.go` `reviewBelongsToPlace`, `repository/review.go` `PlaceIDOf` | Update/Delete проверяют, что `{rid}` принадлежит `{id}` (404 иначе) |
+| Ротация docker-логов | `docker-compose.prod.yml` | `json-file max-size 10m × 3` всем сервисам — логи не забьют диск VPS |
+
 ---
 
 ## 🔸 Открытый тех-долг (по убыванию приоритета)
@@ -90,7 +98,7 @@
   прогон на каждом старте, `*.down.sql` не применяются, идемпотентность вручную.
   → `golang-migrate`/`goose` или таблица `schema_migrations`.
 - **✅→🔸 [backend] Suggest-прокси — таймаут СДЕЛАН (батч 2)** (`http.Client{Timeout:5s}`
-  + контекст). Осталось 🔸: in-memory кэш TTL + дебаунс на бэке.
+  + контекст; батч 5: in-memory кэш TTL 60s). Дебаунс — на фронте уже есть (400ms).
 - **✅ [backend] HTTP-сервер — таймауты + лимит тела СДЕЛАНЫ** (батч 2:
   `ReadHeaderTimeout`/`IdleTimeout`; батч 3: `MaxBytesReader` 1 MB на JSON).
 - **✅ [security] Rate-limit СДЕЛАН (батч 3)** — login/register 20/min по IP,
@@ -114,9 +122,9 @@
 ### Низкое
 
 - 🔸 [data-model] Громоздкий place-SELECT продублирован 4× (List/GetByID/wishlist) и уже разошёлся по полям.
-- 🔸 [backend] ~~Правка заметки без лимита длины~~ (✅ батч 2: лимит 2000 в Update); осталось: гонка TOCTOU на лимите 5 фото; review Update/Delete не сверяет `place_id` из URL.
+- 🔸 [backend] (✅ батч 2: лимит длины заметки; ✅ батч 5: review Update/Delete сверяет `place_id`); осталось: гонка TOCTOU на лимите 5 фото.
 - 🔸 [security] CORS `*` + `AllowCredentials:true` (инертно — токен в заголовке); публичная перечислимая `/p/:id` (перебор id выгружает каталог) → шарить по UUID.
-- 🔸 [ops] Нет лимитов ресурсов и ротации docker-логов на общем VPS; деплой `git reset --hard` на проде. (✅ батч 4: backend healthcheck в compose + nginx ждёт healthy)
+- 🔸 [ops] Нет лимитов ресурсов (mem/cpu) на общем VPS — нужна привязка к реальному потреблению. Деплой `git reset --hard` на проде. (✅ батч 4: backend healthcheck + nginx ждёт healthy; ✅ батч 5: ротация docker-логов)
 - 🔸 [frontend] Разнобой копирайта «место/заведение/location»; Bootstrap + кастомный scrapbook-CSS дублируются. (✅ батч 4: мёртвый `VideoKruzhok.vue` удалён)
 - 🔸 [tech-debt] `feed_events` покрывает только review+note; лента склеивается на клиенте из 3 запросов вместо единого `/feed`.
 

@@ -15,6 +15,11 @@ services:
       timeout: 5s
       retries: 5
     restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   backend:
     build:
@@ -45,6 +50,11 @@ services:
       postgres:
         condition: service_healthy
     restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   frontend:
     build:
@@ -54,6 +64,11 @@ services:
         VITE_YANDEX_MAPS_KEY: ${VITE_YANDEX_MAPS_KEY}
     container_name: aeva-frontend-prod
     restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   nginx:
     image: nginx:alpine
@@ -69,6 +84,11 @@ services:
       frontend:
         condition: service_started
     restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
 volumes:
   pg_data:
