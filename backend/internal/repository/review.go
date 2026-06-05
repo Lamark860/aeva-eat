@@ -188,6 +188,14 @@ func (r *ReviewRepo) Delete(id int) error {
 	return err
 }
 
+// PlaceIDOf возвращает place_id отзыва (лёгкая проверка принадлежности без
+// загрузки авторов/фото). sql.ErrNoRows, если отзыва нет.
+func (r *ReviewRepo) PlaceIDOf(reviewID int) (int, error) {
+	var pid int
+	err := r.db.QueryRow(`SELECT place_id FROM reviews WHERE id = $1`, reviewID).Scan(&pid)
+	return pid, err
+}
+
 func (r *ReviewRepo) IsAuthor(reviewID, userID int) (bool, error) {
 	var exists bool
 	err := r.db.QueryRow(

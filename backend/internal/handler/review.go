@@ -28,6 +28,17 @@ func NewReviewHandler(reviewRepo *repository.ReviewRepo, wishlistRepo *repositor
 	return &ReviewHandler{reviewRepo: reviewRepo, wishlistRepo: wishlistRepo}
 }
 
+// reviewBelongsToPlace проверяет, что {rid} реально принадлежит {id} (place) из
+// URL — иначе можно править/удалять отзыв через несоответствующий путь места.
+func (h *ReviewHandler) reviewBelongsToPlace(r *http.Request, reviewID int) bool {
+	placeID, err := strconv.Atoi(chi.URLParam(r, "id"))
+	if err != nil {
+		return false
+	}
+	pid, err := h.reviewRepo.PlaceIDOf(reviewID)
+	return err == nil && pid == placeID
+}
+
 type createReviewRequest struct {
 	FoodRating    float64 `json:"food_rating"`
 	ServiceRating float64 `json:"service_rating"`
@@ -150,6 +161,10 @@ func (h *ReviewHandler) Update(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid review id"})
 		return
 	}
+	if !h.reviewBelongsToPlace(r, reviewID) {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "review not found for this place"})
+		return
+	}
 
 	isAuthor, err := h.reviewRepo.IsAuthor(reviewID, userID)
 	if err != nil {
@@ -200,6 +215,10 @@ func (h *ReviewHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	reviewID, err := strconv.Atoi(chi.URLParam(r, "rid"))
 	if err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid review id"})
+		return
+	}
+	if !h.reviewBelongsToPlace(r, reviewID) {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "review not found for this place"})
 		return
 	}
 
