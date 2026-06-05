@@ -70,6 +70,13 @@
 | Wishlist strike круговой | `handler/review.go`, `MarkStruckByPlace` | визит кем угодно гасит записку общего wishlist у всех (по спеке) |
 | Auto-merge на rebase | `.github/workflows/automerge.yml` | `--squash` → `--rebase`: dev и master не расходятся, следующий PR не конфликтует |
 
+### ✅ Исправлено — батч 7 (2026-06-05, safe-полировка)
+
+| Что | Где | Суть |
+|---|---|---|
+| a11y + валидный HTML подсказок | `LocationPicker.vue` | `role=combobox/listbox/option`, `aria-activedescendant`, «Ничего не найдено» теперь `<li>` внутри `<ul>` (был невалидный HTML) |
+| TOCTOU лимита фото | `repository/review.go` `AddPhoto` | `SELECT … FOR UPDATE` + проверка лимита в транзакции → параллельные загрузки не пробьют 5 фото (`ErrPhotoLimit`) |
+
 ---
 
 ## 🔸 Открытый тех-долг (по убыванию приоритета)
@@ -122,13 +129,13 @@
 - **✅→🔸 [frontend] Обработка ошибок — частично (батч 2).** `PlaceDetail`:
   delete места/отзыва и toggle wishlist обёрнуты в try/catch + toast. Осталось
   🔸: единый враппер мутаций (паттерн повторяется по views).
-- **🔸 [frontend] a11y подсказок `LocationPicker`** — невалидный HTML (`<li>` вне
-  `<ul>`), нет `role`/`aria`. Образец рядом — `MultiSelect.vue`.
+- **✅ [frontend] a11y подсказок `LocationPicker` — СДЕЛАНО (батч 7)**: валидный
+  HTML + `role`/`aria-activedescendant`.
 
 ### Низкое
 
 - 🔸 [data-model] Громоздкий place-SELECT продублирован 4× (List/GetByID/wishlist) и уже разошёлся по полям.
-- 🔸 [backend] (✅ батч 2: лимит длины заметки; ✅ батч 5: review Update/Delete сверяет `place_id`); осталось: гонка TOCTOU на лимите 5 фото.
+- 🔸 [backend] (✅ батч 2: лимит длины заметки; ✅ батч 5: review сверяет `place_id`; ✅ батч 7: TOCTOU лимита фото устранён через FOR UPDATE).
 - 🔸 [security] CORS `*` + `AllowCredentials:true` (инертно — токен в заголовке); публичная перечислимая `/p/:id` (перебор id выгружает каталог) → шарить по UUID.
 - 🔸 [ops] Нет лимитов ресурсов (mem/cpu) на общем VPS — нужна привязка к реальному потреблению. Деплой `git reset --hard` на проде. (✅ батч 4: backend healthcheck + nginx ждёт healthy; ✅ батч 5: ротация docker-логов)
 - 🔸 [frontend] Разнобой копирайта «место/заведение/location»; Bootstrap + кастомный scrapbook-CSS дублируются. (✅ батч 4: мёртвый `VideoKruzhok.vue` удалён)
