@@ -128,7 +128,12 @@ func (r *PlaceRepo) List(f PlaceFilter) (*PlaceListResult, error) {
 	}
 	if s := strings.TrimSpace(f.Search); s != "" {
 		// Escape LIKE wildcards so user-typed % and _ match literally, not as wildcards.
-		conditions = append(conditions, fmt.Sprintf("LOWER(p.name) LIKE LOWER($%d) ESCAPE '\\'", argIdx))
+		// Ищем по названию, городу И кухне (плейсхолдер обещает «место, кухня, город»).
+		// $argIdx переиспользуется во всех трёх — это валидно, параметр один.
+		conditions = append(conditions, fmt.Sprintf(
+			`(LOWER(p.name) LIKE LOWER($%[1]d) ESCAPE '\'
+			  OR LOWER(COALESCE(p.city, '')) LIKE LOWER($%[1]d) ESCAPE '\'
+			  OR LOWER(COALESCE(ct.name, '')) LIKE LOWER($%[1]d) ESCAPE '\')`, argIdx))
 		args = append(args, "%"+escapeLike(s)+"%")
 		argIdx++
 	}
