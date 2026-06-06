@@ -16,6 +16,10 @@ jobs:
   deploy:
     name: SSH redeploy
     runs-on: ubuntu-latest
+    # GitHub Environment: если в Settings → Environments → production задать
+    # required reviewers, деплой будет ждать ручного апрува. Без правил —
+    # поведение прежнее (additive scaffolding).
+    environment: production
     steps:
       - name: SSH and redeploy
         uses: appleboy/ssh-action@v1.2.0

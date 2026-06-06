@@ -15,6 +15,10 @@ services:
       timeout: 5s
       retries: 5
     restart: unless-stopped
+    # Лимиты — потолки (cap, не reservation): защищают соседей по общему VPS от
+    # runaway-контейнера; нормальное потребление камерного приложения сильно ниже.
+    mem_limit: 768m
+    cpus: "1.5"
     logging:
       driver: json-file
       options:
@@ -50,6 +54,8 @@ services:
       postgres:
         condition: service_healthy
     restart: unless-stopped
+    mem_limit: 512m   # потолок с запасом под пиковую обработку изображений
+    cpus: "1.5"
     logging:
       driver: json-file
       options:
@@ -64,6 +70,8 @@ services:
         VITE_YANDEX_MAPS_KEY: ${VITE_YANDEX_MAPS_KEY}
     container_name: aeva-frontend-prod
     restart: unless-stopped
+    mem_limit: 128m   # nginx со статикой
+    cpus: "0.5"
     logging:
       driver: json-file
       options:
@@ -84,6 +92,8 @@ services:
       frontend:
         condition: service_started
     restart: unless-stopped
+    mem_limit: 128m
+    cpus: "0.5"
     logging:
       driver: json-file
       options:
