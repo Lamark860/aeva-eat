@@ -39,6 +39,63 @@ jobs:
       - name: go test
         run: go test ./... -count=1
 
+  migrations:
+    name: Migrations (real Postgres boot)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: aeva_eat
+          POSTGRES_USER: aeva
+          POSTGRES_PASSWORD: aeva_secret
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U aeva -d aeva_eat"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: backend/go.mod
+          cache-dependency-path: backend/go.sum
+
+      # Реально накатываем все миграции на чистый Postgres: ловим сломанный или
+      # не-идемпотентный SQL ДО прода (unit-тесты этого не проверяют).
+      - name: Build
+        run: go build -o /tmp/api ./cmd/api
+      - name: Boot backend → run migrations
+        env:
+          DB_HOST: localhost
+          DB_PORT: 5432
+          DB_USER: aeva
+          DB_PASSWORD: aeva_secret
+          DB_NAME: aeva_eat
+          DB_SSLMODE: disable
+          JWT_SECRET: ci-secret-ci-secret-ci-secret-ci-secret
+          APP_ENV: development
+          API_PORT: "8085"
+        run: |
+          /tmp/api & SRV=$!
+          ok=0
+          for i in $(seq 1 20); do
+            if curl -fsS http://localhost:8085/api/health >/dev/null 2>&1; then ok=1; break; fi
+            sleep 1
+          done
+          kill $SRV 2>/dev/null || true
+          [ "$ok" = "1" ] || { echo "backend не поднялся — миграции упали"; exit 1; }
+      - name: Verify ledger + idempotent restart
+        env:
+          PGPASSWORD: aeva_secret
+        run: |
+          n=$(psql -h localhost -U aeva -d aeva_eat -tA -c "SELECT count(*) FROM schema_migrations;")
+          echo "applied migrations: $n"
+          [ "$n" -ge 16 ] || { echo "леджер не заполнен ($n)"; exit 1; }
+
   frontend:
     name: Frontend (ESLint + Vite build)
     runs-on: ubuntu-latest
