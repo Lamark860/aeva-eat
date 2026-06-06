@@ -91,6 +91,30 @@ services:
         condition: service_healthy
       frontend:
         condition: service_started
+    networks:
+      - default
+      - proxy
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=proxy"
+      # nginx сам роутит /api→backend, /p/<uuid>→backend, /uploads, /→frontend —
+      # Traefik отдаёт ему весь Host целиком, разбиение путей не нужно
+      - "traefik.http.routers.aeva.rule=Host(`aeva-eat.ru`)"
+      - "traefik.http.routers.aeva.entrypoints=websecure"
+      - "traefik.http.routers.aeva.tls=true"
+      - "traefik.http.routers.aeva.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.aeva.service=aeva"
+      - "traefik.http.services.aeva.loadbalancer.server.port=80"
+      # www → 301 на apex (http→https — глобальный редирект в traefik.yml)
+      - "traefik.http.routers.aeva-www.rule=Host(`www.aeva-eat.ru`)"
+      - "traefik.http.routers.aeva-www.entrypoints=websecure"
+      - "traefik.http.routers.aeva-www.tls=true"
+      - "traefik.http.routers.aeva-www.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.aeva-www.service=aeva"
+      - "traefik.http.routers.aeva-www.middlewares=aeva-www-redir"
+      - "traefik.http.middlewares.aeva-www-redir.redirectregex.regex=^https://www\\.(.+)"
+      - "traefik.http.middlewares.aeva-www-redir.redirectregex.replacement=https://$${1}"
+      - "traefik.http.middlewares.aeva-www-redir.redirectregex.permanent=true"
     restart: unless-stopped
     mem_limit: 128m
     cpus: "0.5"
@@ -99,6 +123,11 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
+
+networks:
+  default:
+  proxy:
+    external: true
 
 volumes:
   pg_data:
