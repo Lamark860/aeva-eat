@@ -32,6 +32,82 @@ func isUniqueViolation(err error) bool {
 	return errors.As(err, &pqErr) && pqErr.Code == "23505"
 }
 
+// placeBaseFrom — общий FROM+JOIN для проекции карточки места (List/GetByID/
+// GetManyByIDs). cuisine + агрегат рейтингов; ct и rs 1:1 с p, дублей нет.
+const placeBaseFrom = `
+	FROM places p
+	LEFT JOIN cuisine_types ct ON ct.id = p.cuisine_type_id
+	LEFT JOIN (
+		SELECT place_id,
+			AVG(food_rating)::numeric(3,1) AS avg_food,
+			AVG(service_rating)::numeric(3,1) AS avg_service,
+			AVG(vibe_rating)::numeric(3,1) AS avg_vibe,
+			COUNT(*) AS review_count
+		FROM reviews GROUP BY place_id
+	) rs ON rs.place_id = p.id
+`
+
+// placeSelectCols — общий список колонок проекции карточки места. Порядок
+// строго соответствует scanPlace. Раньше дублировался в List и GetByID и уже
+// начинал расходиться — теперь единый источник.
+const placeSelectCols = `
+	p.id, p.name, p.address, p.city, p.lat, p.lng,
+	p.cuisine_type_id, ct.name AS cuisine_type, p.website,
+	p.created_by,
+	COALESCE(
+		p.image_url,
+		(SELECT r.image_url FROM reviews r
+		  WHERE r.place_id = p.id AND r.image_url IS NOT NULL
+		  ORDER BY r.created_at ASC, r.id ASC LIMIT 1)
+	) AS image_url,
+	p.created_at, p.updated_at,
+	COALESCE(rs.avg_food, 0), COALESCE(rs.avg_service, 0), COALESCE(rs.avg_vibe, 0),
+	COALESCE(rs.review_count, 0),
+	EXISTS(SELECT 1 FROM reviews rv WHERE rv.place_id = p.id AND rv.is_gem = true) AS is_gem_place,
+	EXISTS(SELECT 1 FROM reviews rv WHERE rv.place_id = p.id AND rv.video_url IS NOT NULL AND rv.video_url <> '') AS has_video,
+	(SELECT rv.video_url FROM reviews rv
+	   WHERE rv.place_id = p.id AND rv.video_url IS NOT NULL AND rv.video_url <> ''
+	   ORDER BY rv.created_at DESC, rv.id DESC LIMIT 1) AS video_url,
+	COALESCE(
+		(SELECT array_agg(rv.video_url ORDER BY rv.created_at DESC, rv.id DESC)
+		   FROM reviews rv WHERE rv.place_id = p.id
+		   AND rv.video_url IS NOT NULL AND rv.video_url <> ''),
+		ARRAY[]::TEXT[]
+	) AS videos,
+	(SELECT rv.comment FROM reviews rv
+	   WHERE rv.place_id = p.id AND rv.comment IS NOT NULL
+	   AND LENGTH(rv.comment) >= 30
+	   ORDER BY LENGTH(rv.comment) DESC, rv.created_at ASC, rv.id ASC
+	   LIMIT 1) AS top_review_comment
+`
+
+type rowScanner interface{ Scan(dest ...any) error }
+
+// scanPlace читает одну строку проекции placeSelectCols в model.Place.
+func scanPlace(s rowScanner) (model.Place, error) {
+	var p model.Place
+	var avgFood, avgService, avgVibe float64
+	var videos pq.StringArray
+	err := s.Scan(
+		&p.ID, &p.Name, &p.Address, &p.City, &p.Lat, &p.Lng,
+		&p.CuisineTypeID, &p.CuisineType, &p.Website,
+		&p.CreatedBy, &p.ImageURL, &p.CreatedAt, &p.UpdatedAt,
+		&avgFood, &avgService, &avgVibe, &p.ReviewCount,
+		&p.IsGemPlace, &p.HasVideo, &p.VideoURL, &videos,
+		&p.TopReviewComment,
+	)
+	if err != nil {
+		return p, err
+	}
+	p.Videos = []string(videos)
+	if p.ReviewCount > 0 {
+		p.AvgFood = &avgFood
+		p.AvgService = &avgService
+		p.AvgVibe = &avgVibe
+	}
+	return p, nil
+}
+
 func NewPlaceRepo(db *sql.DB) *PlaceRepo {
 	return &PlaceRepo{db: db}
 }
@@ -75,18 +151,7 @@ func (r *PlaceRepo) List(f PlaceFilter) (*PlaceListResult, error) {
 	// Postgres rule that ORDER BY expressions must appear in SELECT under DISTINCT.
 	// Switching the category filter to EXISTS removes the need for both the JOIN
 	// and DISTINCT; ct and rs are 1:1 with p so no duplicates remain.
-	baseFrom := `
-		FROM places p
-		LEFT JOIN cuisine_types ct ON ct.id = p.cuisine_type_id
-		LEFT JOIN (
-			SELECT place_id,
-				AVG(food_rating)::numeric(3,1) AS avg_food,
-				AVG(service_rating)::numeric(3,1) AS avg_service,
-				AVG(vibe_rating)::numeric(3,1) AS avg_vibe,
-				COUNT(*) AS review_count
-			FROM reviews GROUP BY place_id
-		) rs ON rs.place_id = p.id
-	`
+	baseFrom := placeBaseFrom
 
 	// Базовое условие: показываем только активные (не soft-deleted) места.
 	conditions := []string{"p.deleted_at IS NULL"}
@@ -177,39 +242,8 @@ func (r *PlaceRepo) List(f PlaceFilter) (*PlaceListResult, error) {
 		return nil, fmt.Errorf("count places: %w", err)
 	}
 
-	// Main query
-	query := `
-		SELECT p.id, p.name, p.address, p.city, p.lat, p.lng,
-			p.cuisine_type_id, ct.name AS cuisine_type, p.website,
-			p.created_by,
-			COALESCE(
-				p.image_url,
-				(SELECT r.image_url
-				   FROM reviews r
-				  WHERE r.place_id = p.id AND r.image_url IS NOT NULL
-				  ORDER BY r.created_at ASC, r.id ASC
-				  LIMIT 1)
-			) AS image_url,
-			p.created_at, p.updated_at,
-			COALESCE(rs.avg_food, 0), COALESCE(rs.avg_service, 0), COALESCE(rs.avg_vibe, 0),
-			COALESCE(rs.review_count, 0),
-			EXISTS(SELECT 1 FROM reviews rv WHERE rv.place_id = p.id AND rv.is_gem = true) AS is_gem_place,
-			EXISTS(SELECT 1 FROM reviews rv WHERE rv.place_id = p.id AND rv.video_url IS NOT NULL AND rv.video_url <> '') AS has_video,
-			(SELECT rv.video_url FROM reviews rv
-			   WHERE rv.place_id = p.id AND rv.video_url IS NOT NULL AND rv.video_url <> ''
-			   ORDER BY rv.created_at DESC, rv.id DESC LIMIT 1) AS video_url,
-			COALESCE(
-				(SELECT array_agg(rv.video_url ORDER BY rv.created_at DESC, rv.id DESC)
-				   FROM reviews rv WHERE rv.place_id = p.id
-				   AND rv.video_url IS NOT NULL AND rv.video_url <> ''),
-				ARRAY[]::TEXT[]
-			) AS videos,
-			(SELECT rv.comment FROM reviews rv
-			   WHERE rv.place_id = p.id AND rv.comment IS NOT NULL
-			   AND LENGTH(rv.comment) >= 30
-			   ORDER BY LENGTH(rv.comment) DESC, rv.created_at ASC, rv.id ASC
-			   LIMIT 1) AS top_review_comment
-	` + baseFrom + whereClause
+	// Main query — проекция вынесена в placeSelectCols (общая с GetByID/GetManyByIDs).
+	query := "SELECT " + placeSelectCols + baseFrom + whereClause
 
 	// All ORDER BY clauses end with `p.id DESC` as a stable tiebreaker — without it,
 	// rows with equal sort keys return in undefined order and pagination becomes unstable
@@ -253,25 +287,9 @@ func (r *PlaceRepo) List(f PlaceFilter) (*PlaceListResult, error) {
 
 	var places []model.Place
 	for rows.Next() {
-		var p model.Place
-		var avgFood, avgService, avgVibe float64
-		var videos pq.StringArray
-		err := rows.Scan(
-			&p.ID, &p.Name, &p.Address, &p.City, &p.Lat, &p.Lng,
-			&p.CuisineTypeID, &p.CuisineType, &p.Website,
-			&p.CreatedBy, &p.ImageURL, &p.CreatedAt, &p.UpdatedAt,
-			&avgFood, &avgService, &avgVibe, &p.ReviewCount,
-			&p.IsGemPlace, &p.HasVideo, &p.VideoURL, &videos,
-			&p.TopReviewComment,
-		)
+		p, err := scanPlace(rows)
 		if err != nil {
 			return nil, fmt.Errorf("scan place: %w", err)
-		}
-		p.Videos = []string(videos)
-		if p.ReviewCount > 0 {
-			p.AvgFood = &avgFood
-			p.AvgService = &avgService
-			p.AvgVibe = &avgVibe
 		}
 		places = append(places, p)
 	}
@@ -304,66 +322,12 @@ func (r *PlaceRepo) List(f PlaceFilter) (*PlaceListResult, error) {
 }
 
 func (r *PlaceRepo) GetByID(id int) (*model.Place, error) {
-	p := &model.Place{}
-	var avgFood, avgService, avgVibe float64
-	err := r.db.QueryRow(`
-		SELECT p.id, p.name, p.address, p.city, p.lat, p.lng,
-			p.cuisine_type_id, ct.name AS cuisine_type, p.website,
-			p.created_by,
-			COALESCE(
-				p.image_url,
-				(SELECT r.image_url
-				   FROM reviews r
-				  WHERE r.place_id = p.id AND r.image_url IS NOT NULL
-				  ORDER BY r.created_at ASC, r.id ASC
-				  LIMIT 1)
-			) AS image_url,
-			p.created_at, p.updated_at,
-			COALESCE(rs.avg_food, 0), COALESCE(rs.avg_service, 0), COALESCE(rs.avg_vibe, 0),
-			COALESCE(rs.review_count, 0),
-			EXISTS(SELECT 1 FROM reviews rv WHERE rv.place_id = p.id AND rv.is_gem = true) AS is_gem_place,
-			EXISTS(SELECT 1 FROM reviews rv WHERE rv.place_id = p.id AND rv.video_url IS NOT NULL AND rv.video_url <> '') AS has_video,
-			(SELECT rv.video_url FROM reviews rv
-			   WHERE rv.place_id = p.id AND rv.video_url IS NOT NULL AND rv.video_url <> ''
-			   ORDER BY rv.created_at DESC, rv.id DESC LIMIT 1) AS video_url,
-			COALESCE(
-				(SELECT array_agg(rv.video_url ORDER BY rv.created_at DESC, rv.id DESC)
-				   FROM reviews rv WHERE rv.place_id = p.id
-				   AND rv.video_url IS NOT NULL AND rv.video_url <> ''),
-				ARRAY[]::TEXT[]
-			) AS videos,
-			(SELECT rv.comment FROM reviews rv
-			   WHERE rv.place_id = p.id AND rv.comment IS NOT NULL
-			   AND LENGTH(rv.comment) >= 30
-			   ORDER BY LENGTH(rv.comment) DESC, rv.created_at ASC, rv.id ASC
-			   LIMIT 1) AS top_review_comment
-		FROM places p
-		LEFT JOIN cuisine_types ct ON ct.id = p.cuisine_type_id
-		LEFT JOIN (
-			SELECT place_id,
-				AVG(food_rating)::numeric(3,1) AS avg_food,
-				AVG(service_rating)::numeric(3,1) AS avg_service,
-				AVG(vibe_rating)::numeric(3,1) AS avg_vibe,
-				COUNT(*) AS review_count
-			FROM reviews GROUP BY place_id
-		) rs ON rs.place_id = p.id
-		WHERE p.id = $1
-	`, id).Scan(
-		&p.ID, &p.Name, &p.Address, &p.City, &p.Lat, &p.Lng,
-		&p.CuisineTypeID, &p.CuisineType, &p.Website,
-		&p.CreatedBy, &p.ImageURL, &p.CreatedAt, &p.UpdatedAt,
-		&avgFood, &avgService, &avgVibe, &p.ReviewCount,
-		&p.IsGemPlace, &p.HasVideo, &p.VideoURL, (*pq.StringArray)(&p.Videos),
-		&p.TopReviewComment,
-	)
+	row, err := scanPlace(r.db.QueryRow(
+		"SELECT "+placeSelectCols+placeBaseFrom+" WHERE p.id = $1", id))
 	if err != nil {
 		return nil, err
 	}
-	if p.ReviewCount > 0 {
-		p.AvgFood = &avgFood
-		p.AvgService = &avgService
-		p.AvgVibe = &avgVibe
-	}
+	p := &row
 
 	// deleted_at — для soft-delete: loadPlaces/share проверяют это поле, чтобы
 	// не показывать архивированные места (отдельным лёгким запросом, чтобы не
@@ -420,6 +384,65 @@ func (r *PlaceRepo) GetByID(id int) (*model.Place, error) {
 	p.RatingsPerUser = ratings
 
 	return p, rows.Err()
+}
+
+// GetManyByIDs — облегчённая батч-загрузка мест для агрегатных страниц
+// (профиль/жемчужины). Возвращает карточки в порядке входных id, пропуская
+// удалённые/несуществующие. В отличие от GetByID НЕ тянет detail-only поля
+// (attendance, ratings_per_user, categories) — карточки их не используют; но
+// gem_status включён (его читает GemsHub). Заменяет N×GetByID (N×8 запросов)
+// на ~4 запроса суммарно.
+func (r *PlaceRepo) GetManyByIDs(ids []int) ([]model.Place, error) {
+	if len(ids) == 0 {
+		return []model.Place{}, nil
+	}
+	rows, err := r.db.Query(
+		"SELECT "+placeSelectCols+placeBaseFrom+
+			" WHERE p.id = ANY($1) AND p.deleted_at IS NULL", pq.Array(ids))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	byID := map[int]model.Place{}
+	present := make([]int, 0, len(ids))
+	for rows.Next() {
+		p, err := scanPlace(rows)
+		if err != nil {
+			return nil, err
+		}
+		byID[p.ID] = p
+		present = append(present, p.ID)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	reviewersByPlace, err := r.getReviewersBatch(present)
+	if err != nil {
+		return nil, err
+	}
+	photosByPlace, err := r.getFeedPhotosBatch(present)
+	if err != nil {
+		return nil, err
+	}
+	gemByPlace, err := r.getGemStatusBatch(present)
+	if err != nil {
+		return nil, err
+	}
+
+	out := make([]model.Place, 0, len(ids))
+	for _, id := range ids { // сохраняем входной порядок
+		p, ok := byID[id]
+		if !ok {
+			continue // удалено или не найдено
+		}
+		p.Reviewers = reviewersByPlace[id]
+		p.FeedPhotos = photosByPlace[id]
+		p.GemStatus = gemByPlace[id]
+		out = append(out, p)
+	}
+	return out, nil
 }
 
 func (r *PlaceRepo) Create(p *model.Place, categoryIDs []int) (*model.Place, error) {
@@ -729,6 +752,44 @@ func (r *PlaceRepo) getGemStatus(placeID int) (*model.GemStatus, error) {
 		return nil, nil
 	}
 	return gs, nil
+}
+
+// getGemStatusBatch — gem-status сразу для набора мест (один запрос вместо N).
+// Тот же порядок, что в getGemStatus: внутри места — по первой gem-отметке.
+func (r *PlaceRepo) getGemStatusBatch(placeIDs []int) (map[int]*model.GemStatus, error) {
+	out := map[int]*model.GemStatus{}
+	if len(placeIDs) == 0 {
+		return out, nil
+	}
+	rows, err := r.db.Query(`
+		SELECT rv.place_id, u.id, u.username, u.avatar_url, MIN(rv.created_at) AS first_at
+		FROM reviews rv
+		JOIN review_authors ra ON ra.review_id = rv.id
+		JOIN users u ON u.id = ra.user_id
+		WHERE rv.place_id = ANY($1) AND rv.is_gem = true
+		GROUP BY rv.place_id, u.id, u.username, u.avatar_url
+		ORDER BY rv.place_id, first_at ASC, u.username ASC
+	`, pq.Array(placeIDs))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var pid int
+		var rev model.Reviewer
+		var firstAt time.Time
+		if err := rows.Scan(&pid, &rev.ID, &rev.Username, &rev.AvatarURL, &firstAt); err != nil {
+			return nil, err
+		}
+		gs := out[pid]
+		if gs == nil {
+			gs = &model.GemStatus{MarkedBy: []model.Reviewer{}, FirstMarkedAt: firstAt}
+			out[pid] = gs
+		}
+		gs.MarkedBy = append(gs.MarkedBy, rev)
+	}
+	return out, rows.Err()
 }
 
 // getAttendance — список «кто был и сколько раз». Под общим тикетом рисуется

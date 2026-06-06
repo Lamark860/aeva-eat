@@ -19,18 +19,15 @@ func NewAggregateHandler(agg *repository.AggregateRepo, place *repository.PlaceR
 	return &AggregateHandler{agg: agg, place: place}
 }
 
-// loadPlaces — батч-чтение мест по id'шникам через GetByID. Сохраняет
-// порядок входного списка. Тихо пропускает удалённые / недоступные id.
+// loadPlaces — батч-чтение мест по id'шникам (один облегчённый GetManyByIDs
+// вместо N×GetByID). Сохраняет порядок входного списка, пропускает удалённые/
+// недоступные id. detail-only поля (attendance, ratings) карточкам не нужны.
 func (h *AggregateHandler) loadPlaces(ids []int) []model.Place {
-	out := make([]model.Place, 0, len(ids))
-	for _, id := range ids {
-		p, err := h.place.GetByID(id)
-		if err != nil || p == nil || p.DeletedAt != nil {
-			continue // пропускаем недоступные и архивированные (soft-deleted)
-		}
-		out = append(out, *p)
+	places, err := h.place.GetManyByIDs(ids)
+	if err != nil {
+		return []model.Place{}
 	}
-	return out
+	return places
 }
 
 // GET /api/cities — все города круга с агрегатами.
