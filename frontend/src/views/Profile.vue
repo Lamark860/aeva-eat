@@ -372,7 +372,7 @@ async function handleUpdateReview(data) {
 }
 
 async function handleDeleteReview(rv) {
-  if (!confirm(`Удалить отзыв к "${rv.place_name || 'заведению'}"?`)) return
+  if (!confirm(`Удалить отзыв к "${rv.place_name || 'месту'}"?`)) return
   try {
     await reviewsStore.deleteReview(rv.place_id, rv.id)
     toast.info('Отзыв удалён')

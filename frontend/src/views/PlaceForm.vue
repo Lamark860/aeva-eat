@@ -33,7 +33,7 @@
       </div>
 
       <form @submit.prevent="handleSubmit">
-        <!-- Карта (поиск заведения) — ПЕРВЫМ -->
+        <!-- Карта (поиск места) — ПЕРВЫМ -->
         <div class="form-section">
           <label class="form-label fw-medium">Найти на Яндекс Картах</label>
           <LocationPicker
@@ -79,7 +79,7 @@
           <div v-if="showManual" class="manual-fields">
             <div class="mb-3">
               <label class="form-label fw-medium">Название *</label>
-              <input v-model="form.name" type="text" class="form-control" placeholder="Как называется заведение" required />
+              <input v-model="form.name" type="text" class="form-control" placeholder="Как называется место" required />
             </div>
             <div class="row g-3 mb-3">
               <div class="col-md-5">
@@ -124,7 +124,7 @@
 
         <!-- Фото -->
         <div class="form-section">
-          <label class="form-label fw-medium">Фото заведения</label>
+          <label class="form-label fw-medium">Фото места</label>
           <div v-if="currentImageUrl" class="mb-2 position-relative d-inline-block">
             <img :src="currentImageUrl" alt="Фото" class="rounded" style="max-height: 200px; object-fit: cover" />
           </div>
@@ -151,7 +151,7 @@
             Загрузить фото
           </button>
           <p v-if="selectedImage && !isEdit" class="small text-muted mt-1">
-            Фото будет загружено после создания заведения
+            Фото будет загружено после создания места
           </p>
         </div>
 

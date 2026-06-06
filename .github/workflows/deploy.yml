@@ -43,6 +43,12 @@ jobs:
             # Миграции схемы backend накатывает сам при старте (идемпотентно).
             docker compose -f docker-compose.prod.yml up -d --build
 
+            echo "==> Перезагружаю nginx (config — bind-mount; up -d не перезагружает"
+            echo "    nginx при изменении только содержимого файла → правки конфига молча"
+            echo "    не применялись бы). reload = zero-downtime, restart — фолбэк."
+            docker compose -f docker-compose.prod.yml exec -T nginx nginx -s reload \
+              || docker compose -f docker-compose.prod.yml restart nginx
+
             echo "==> Чищу висячие образы"
             docker image prune -f
 

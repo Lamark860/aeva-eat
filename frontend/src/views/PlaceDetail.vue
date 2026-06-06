@@ -402,13 +402,13 @@ async function handleDeleteReview(id) {
 
 async function handleDelete() {
   // Мягкое удаление: место уходит в архив, отзывы/фото круга сохраняются.
-  if (!confirm('Убрать заведение в архив? Оно исчезнет из списков и с карты, но отзывы и фото круга сохранятся. Вернуть сможет администратор.')) return
+  if (!confirm('Убрать место в архив? Оно исчезнет из списков и с карты, но отзывы и фото круга сохранятся. Вернуть сможет администратор.')) return
   try {
     await placesStore.deletePlace(place.value.id)
-    toast.info('Заведение убрано в архив')
+    toast.info('Место убрано в архив')
     router.push('/places')
   } catch (e) {
-    toast.error(e.response?.data?.error || 'Не удалось убрать заведение')
+    toast.error(e.response?.data?.error || 'Не удалось убрать место')
   }
 }
 

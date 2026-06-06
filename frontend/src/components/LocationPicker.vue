@@ -5,7 +5,7 @@
         v-model="searchQuery"
         type="text"
         class="form-control"
-        placeholder="Название заведения или адрес..."
+        placeholder="Название места или адрес..."
         autocomplete="off"
         role="combobox"
         aria-controls="lp-suggest-list"
@@ -41,7 +41,7 @@
           <span v-else-if="item.description" class="suggest-desc">{{ item.description }}</span>
         </li>
       </ul>
-      <small class="text-muted d-block mt-1">Начните вводить — появятся заведения и адреса. Или кликните по карте.</small>
+      <small class="text-muted d-block mt-1">Начните вводить — появятся места и адреса. Или кликните по карте.</small>
       <ul v-if="suggestions.length === 0 && showDropdown" class="suggest-dropdown" role="listbox" aria-label="Подсказки мест">
         <li class="suggest-item text-muted" role="option" aria-disabled="true">Ничего не найдено</li>
       </ul>
