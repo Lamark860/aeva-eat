@@ -146,7 +146,7 @@
 
 - ✅→🔸 [data-model] Place-SELECT: List/GetByID/GetManyByIDs сведены к общим `placeSelectCols`+`placeBaseFrom`+`scanPlace` (батч 11) — дрейф List↔GetByID устранён. Остаётся 🔸: 2 более лёгкие копии в `wishlist.go` (без videos/top_comment) — консолидация добавила бы им ненужные колонки, оставлены намеренно.
 - 🔸 [backend] (✅ батч 2: лимит длины заметки; ✅ батч 5: review сверяет `place_id`; ✅ батч 7: TOCTOU лимита фото устранён через FOR UPDATE).
-- 🔸 [security] CORS `*` + `AllowCredentials:true` (инертно — токен в заголовке); публичная перечислимая `/p/:id` (перебор id выгружает каталог) → шарить по UUID.
+- ✅→🔸 [security] Публичная `/p/` — СДЕЛАНО (батч 12): шарится по неугадываемому UUID `share_token` (миграция 018), не по инкрементному id — энумерация каталога закрыта; nginx-регэксп под UUID, кнопка «поделиться» в PlaceDetail. Остаётся 🔸: CORS `*` + `AllowCredentials:true` (инертно — токен в заголовке, не в куках).
 - 🔸 [ops] Деплой `git reset --hard` на проде (forward-only). (✅ батч 4: backend healthcheck + nginx ждёт healthy; ✅ батч 5: ротация docker-логов; ✅ батч 10: лимиты mem/cpu — потолки postgres 768m/backend 512m/front+nginx 128m)
 - 🔸 [frontend] Разнобой копирайта «место/заведение/location»; Bootstrap + кастомный scrapbook-CSS дублируются. (✅ батч 4: мёртвый `VideoKruzhok.vue` удалён)
 - 🔸 [tech-debt] `feed_events` покрывает только review+note; лента склеивается на клиенте из 3 запросов вместо единого `/feed`.
