@@ -3,7 +3,6 @@ package handler
 import (
 	"html/template"
 	"net/http"
-	"strconv"
 
 	"github.com/aeva-eat/backend/internal/repository"
 	"github.com/go-chi/chi/v5"
@@ -34,15 +33,16 @@ type shareData struct {
 	OGImage  string
 }
 
-// Render — GET /p/<id>. Без auth. 404 если места нет.
+// Render — GET /p/<token>. Без auth. 404 если токен не найден/архивировано.
+// Шарится по неугадываемому UUID (не по инкрементному id) — нет энумерации.
 func (h *ShareHandler) Render(w http.ResponseWriter, r *http.Request) {
-	id, err := strconv.Atoi(chi.URLParam(r, "id"))
-	if err != nil {
+	token := chi.URLParam(r, "token")
+	if token == "" {
 		http.NotFound(w, r)
 		return
 	}
-	p, err := h.placeRepo.GetByID(id)
-	if err != nil || p == nil || p.DeletedAt != nil {
+	p, err := h.placeRepo.GetByShareToken(token)
+	if err != nil || p == nil {
 		http.NotFound(w, r) // нет места или архивировано (soft-deleted)
 		return
 	}

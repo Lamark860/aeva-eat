@@ -121,6 +121,8 @@
 
         <a v-if="hasMap" href="#detail-map" class="cta-link">↗ показать на карте</a>
 
+        <button v-if="place.share_token" type="button" class="cta-link" @click="sharePlace">↗ поделиться</button>
+
         <button
           v-if="auth.isAuthenticated && !showForm && !editingReview"
           type="button"
@@ -364,6 +366,19 @@ async function handleUpdateReview(data) {
   }
   await placesStore.fetchPlace(route.params.id)
   await reviewsStore.fetchByPlace(route.params.id)
+}
+
+async function sharePlace() {
+  // Публичная ссылка по неугадываемому токену (не по id места).
+  const url = `${window.location.origin}/p/${place.value.share_token}`
+  try {
+    if (navigator.share) {
+      await navigator.share({ title: place.value.name, url })
+    } else {
+      await navigator.clipboard.writeText(url)
+      toast.success('Ссылка скопирована')
+    }
+  } catch { /* пользователь отменил шеринг — не ошибка */ }
 }
 
 async function toggleWishlist() {

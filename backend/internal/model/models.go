@@ -65,6 +65,9 @@ type Place struct {
 	// DeletedAt — мягкое удаление (архив). nil = активно. Заполняется только в
 	// GetByID; листинги/рандом исключают удалённые на уровне SQL.
 	DeletedAt *time.Time `json:"deleted_at,omitempty"`
+	// ShareToken — неугадываемый токен для публичной ссылки /p/<token>.
+	// Заполняется в GetByID (для кнопки «поделиться» на карточке).
+	ShareToken *string `json:"share_token,omitempty"`
 }
 
 // GemStatus — кто первый отметил место жемчужиной + остальные «подписавшиеся».

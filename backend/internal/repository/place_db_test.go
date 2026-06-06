@@ -74,6 +74,19 @@ func TestGetManyByIDs_Integration(t *testing.T) {
 		t.Errorf("place B should have no reviews/gem: %+v", b)
 	}
 
+	// share_token заполнен дефолтом и резолвится через GetByShareToken.
+	full, err := repo.GetByID(901)
+	if err != nil || full == nil || full.ShareToken == nil || *full.ShareToken == "" {
+		t.Fatalf("share_token not populated on GetByID: %+v (err %v)", full, err)
+	}
+	byTok, err := repo.GetByShareToken(*full.ShareToken)
+	if err != nil || byTok == nil || byTok.ID != 901 {
+		t.Fatalf("GetByShareToken failed: %+v (err %v)", byTok, err)
+	}
+	if nope, _ := repo.GetByShareToken("00000000-0000-0000-0000-000000000000"); nope != nil {
+		t.Error("unknown token should return nil")
+	}
+
 	// Soft-deleted место не возвращается.
 	mustExec(t, db, `UPDATE places SET deleted_at = now() WHERE id = 902`)
 	got2, err := repo.GetManyByIDs([]int{902, 901})

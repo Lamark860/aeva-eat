@@ -108,7 +108,7 @@ func main() {
 	// DESIGN-DECISIONS Q3 — публичные share-страницы /p/<id>. Без auth, HTML
 	// с OG-метатегами для preview в мессенджерах. nginx проксирует /p/<digits>
 	// на бэк (см. nginx/nginx.conf).
-	r.Get("/p/{id}", shareHandler.Render)
+	r.Get("/p/{token}", shareHandler.Render)
 
 	// All data routes require auth
 	r.Group(func(r chi.Router) {
@@ -238,6 +238,7 @@ func runMigrations(db *sql.DB) error {
 		"migrations/015_wishlist_struck.up.sql",
 		"migrations/016_place_identity.up.sql",
 		"migrations/017_place_soft_delete.up.sql",
+		"migrations/018_place_share_token.up.sql",
 		// ВНИМАНИЕ: 005_seed_data — это ДЕМО-данные, не схема. Раньше он стоял
 		// здесь и прогонялся при каждом старте; т.к. wishlist_custom не имеет
 		// уникального индекса, ON CONFLICT не срабатывал и записи плодились

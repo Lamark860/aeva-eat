@@ -329,10 +329,11 @@ func (r *PlaceRepo) GetByID(id int) (*model.Place, error) {
 	}
 	p := &row
 
-	// deleted_at — для soft-delete: loadPlaces/share проверяют это поле, чтобы
-	// не показывать архивированные места (отдельным лёгким запросом, чтобы не
-	// трогать общий SELECT/Scan, идентичный в List).
-	_ = r.db.QueryRow(`SELECT deleted_at FROM places WHERE id = $1`, id).Scan(&p.DeletedAt)
+	// deleted_at + share_token — детальные поля карточки (soft-delete проверка +
+	// ссылка «поделиться»). Отдельным лёгким запросом, чтобы не трогать общий
+	// SELECT/Scan, идентичный в List.
+	_ = r.db.QueryRow(`SELECT deleted_at, share_token FROM places WHERE id = $1`, id).
+		Scan(&p.DeletedAt, &p.ShareToken)
 
 	// Load categories
 	rows, err := r.db.Query(
@@ -443,6 +444,21 @@ func (r *PlaceRepo) GetManyByIDs(ids []int) ([]model.Place, error) {
 		out = append(out, p)
 	}
 	return out, nil
+}
+
+// GetByShareToken — место по публичному share-токену (для /p/<token>).
+// Возвращает nil, nil если токен не найден или место архивировано.
+func (r *PlaceRepo) GetByShareToken(token string) (*model.Place, error) {
+	p, err := scanPlace(r.db.QueryRow(
+		"SELECT "+placeSelectCols+placeBaseFrom+
+			" WHERE p.share_token = $1 AND p.deleted_at IS NULL", token))
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &p, nil
 }
 
 func (r *PlaceRepo) Create(p *model.Place, categoryIDs []int) (*model.Place, error) {
