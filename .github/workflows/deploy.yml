@@ -43,11 +43,13 @@ jobs:
             # Миграции схемы backend накатывает сам при старте (идемпотентно).
             docker compose -f docker-compose.prod.yml up -d --build
 
-            echo "==> Перезагружаю nginx (config — bind-mount; up -d не перезагружает"
-            echo "    nginx при изменении только содержимого файла → правки конфига молча"
-            echo "    не применялись бы). reload = zero-downtime, restart — фолбэк."
-            docker compose -f docker-compose.prod.yml exec -T nginx nginx -s reload \
-              || docker compose -f docker-compose.prod.yml restart nginx
+            echo "==> Пересоздаю nginx, чтобы применился изменённый конфиг."
+            # nginx.prod.conf — bind-mount ОДНОГО файла: docker привязывает его по
+            # inode на старте контейнера. git reset --hard заменяет файл (новый
+            # inode), поэтому `up -d` (контейнер не пересоздаётся) и даже
+            # `nginx -s reload`/`restart` продолжают читать СТАРЫЙ inode. Только
+            # пересоздание контейнера переразрешает bind-mount на текущий файл.
+            docker compose -f docker-compose.prod.yml up -d --force-recreate nginx
 
             echo "==> Чищу висячие образы"
             docker image prune -f
