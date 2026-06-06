@@ -99,10 +99,12 @@
   `gh workflow run deploy.yml` руками. → завести `GH_PAT` (repo→Settings→Secrets).
   (✅ батч 6: squash→rebase убрал расхождение dev↔master, но это отдельная от
   GH_PAT проблема.)
-- **🔸 [ops] Авто-конвейер dev→master→прод без апрува и без теста миграций.**
-  `automerge.yml`/`deploy.yml`; CI гоняет только vet/build/unit. Сломанная
-  миграция уезжает на живую БД, откат forward-only. → job с поднятием postgres и
-  прогоном `runMigrations`; ручной апрув (environment protection) на прод.
+- **✅→🔸 [ops] Тест миграций + апрув прода — СДЕЛАНО (батч 10).** CI-job
+  `migrations` поднимает Postgres-service и реально бутит backend (прогон всех
+  миграций + проверка леджера ≥16) — сломанный/не-идемпотентный SQL ловится до
+  прода. `deploy.yml` получил `environment: production` — апрув включается заданием
+  required reviewers в Settings→Environments (репо-настройка). Осталось 🔸: задать
+  reviewers (твоё действие) и forward-only откат (по тегу/SHA).
 ### Среднее
 
 - **✅→🔸 [data-model] N+1 в листингах — главный путь СДЕЛАН (батч 8).** `List`
@@ -144,7 +146,7 @@
 - 🔸 [data-model] Громоздкий place-SELECT продублирован 4× (List/GetByID/wishlist) и уже разошёлся по полям.
 - 🔸 [backend] (✅ батч 2: лимит длины заметки; ✅ батч 5: review сверяет `place_id`; ✅ батч 7: TOCTOU лимита фото устранён через FOR UPDATE).
 - 🔸 [security] CORS `*` + `AllowCredentials:true` (инертно — токен в заголовке); публичная перечислимая `/p/:id` (перебор id выгружает каталог) → шарить по UUID.
-- 🔸 [ops] Нет лимитов ресурсов (mem/cpu) на общем VPS — нужна привязка к реальному потреблению. Деплой `git reset --hard` на проде. (✅ батч 4: backend healthcheck + nginx ждёт healthy; ✅ батч 5: ротация docker-логов)
+- 🔸 [ops] Деплой `git reset --hard` на проде (forward-only). (✅ батч 4: backend healthcheck + nginx ждёт healthy; ✅ батч 5: ротация docker-логов; ✅ батч 10: лимиты mem/cpu — потолки postgres 768m/backend 512m/front+nginx 128m)
 - 🔸 [frontend] Разнобой копирайта «место/заведение/location»; Bootstrap + кастомный scrapbook-CSS дублируются. (✅ батч 4: мёртвый `VideoKruzhok.vue` удалён)
 - 🔸 [tech-debt] `feed_events` покрывает только review+note; лента склеивается на клиенте из 3 запросов вместо единого `/feed`.
 
