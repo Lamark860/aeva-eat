@@ -243,15 +243,52 @@ func runMigrations(db *sql.DB) error {
 		// уникального индекса, ON CONFLICT не срабатывал и записи плодились
 		// (по копии на рестарт). Демо-сид теперь руками: backend/scripts/seed_demo.sh.
 	}
+	// Леджер применённых миграций: больше не гоняем весь SQL на каждом старте,
+	// применяем только новые файлы и фиксируем версию. Существующие up-скрипты
+	// остаются идемпотентными (IF NOT EXISTS / ON CONFLICT), поэтому первый старт
+	// с леджером на уже мигрированной проде безопасно перенакатит их по разу и
+	// запишет — дальше каждый файл применяется максимум once.
+	if _, err := db.Exec(`
+		CREATE TABLE IF NOT EXISTS schema_migrations (
+			version    TEXT PRIMARY KEY,
+			applied_at TIMESTAMPTZ NOT NULL DEFAULT now()
+		)
+	`); err != nil {
+		return fmt.Errorf("creating schema_migrations: %w", err)
+	}
+
 	for _, f := range files {
+		var exists bool
+		if err := db.QueryRow(`SELECT EXISTS(SELECT 1 FROM schema_migrations WHERE version = $1)`, f).Scan(&exists); err != nil {
+			return fmt.Errorf("checking migration %s: %w", f, err)
+		}
+		if exists {
+			continue
+		}
+
 		migrationSQL, err := os.ReadFile(f)
 		if err != nil {
 			return fmt.Errorf("reading migration %s: %w", f, err)
 		}
-		_, err = db.Exec(string(migrationSQL))
+
+		// Каждая миграция — в транзакции: запись в леджер коммитится вместе с
+		// самой миграцией, поэтому частично-применённого состояния не остаётся.
+		tx, err := db.Begin()
 		if err != nil {
+			return fmt.Errorf("begin tx for %s: %w", f, err)
+		}
+		if _, err := tx.Exec(string(migrationSQL)); err != nil {
+			tx.Rollback()
 			return fmt.Errorf("executing migration %s: %w", f, err)
 		}
+		if _, err := tx.Exec(`INSERT INTO schema_migrations (version) VALUES ($1)`, f); err != nil {
+			tx.Rollback()
+			return fmt.Errorf("recording migration %s: %w", f, err)
+		}
+		if err := tx.Commit(); err != nil {
+			return fmt.Errorf("commit migration %s: %w", f, err)
+		}
+		log.Printf("applied migration %s", f)
 	}
 	return nil
 }
