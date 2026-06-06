@@ -96,6 +96,24 @@ jobs:
           echo "applied migrations: $n"
           [ "$n" -ge 16 ] || { echo "леджер не заполнен ($n)"; exit 1; }
 
+  nginx:
+    name: Nginx (config syntax)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # Валидируем оба конфига как conf.d/default.conf с резолвом upstream
+      # (backend/frontend → 127.0.0.1). Ловит синтаксис ДО прода — например
+      # незакавыченный регэксп с {n}, который однажды уронил nginx на проде.
+      - name: nginx -t (prod + dev)
+        run: |
+          for f in nginx/nginx.prod.conf nginx/nginx.conf; do
+            echo "=== $f ==="
+            docker run --rm \
+              --add-host backend:127.0.0.1 --add-host frontend:127.0.0.1 \
+              -v "$PWD/$f":/etc/nginx/conf.d/default.conf:ro \
+              nginx:alpine nginx -t
+          done
+
   frontend:
     name: Frontend (ESLint + Vite build)
     runs-on: ubuntu-latest
