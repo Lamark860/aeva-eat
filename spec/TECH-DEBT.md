@@ -107,12 +107,13 @@
   reviewers (твоё действие) и forward-only откат (по тегу/SHA).
 ### Среднее
 
-- **✅→🔸 [data-model] N+1 в листингах — главный путь СДЕЛАН (батч 8).** `List`
-  («Найти», самый горячий) теперь батчит reviewers + feedPhotos (2 запроса вместо
-  2×N). Осталось 🔸: `aggregate.go:loadPlaces` (профиль/жемчужины) всё ещё зовёт
-  `GetByID` в цикле — корректный батч требует ещё и батчить `gem_status` (его
-  использует GemsHub для сортировки), поэтому отложено как отдельная аккуратная
-  работа; на текущем масштабе (invite-only, десятки мест) терпимо.
+- **✅ [data-model] N+1 в листингах — СДЕЛАНО (батч 8 + 11).** `List` («Найти»)
+  батчит reviewers+feedPhotos (батч 8). `loadPlaces` (профиль/жемчужины) переведён
+  на `GetManyByIDs` — облегчённая батч-загрузка (base + reviewers + feedPhotos +
+  gem_status одним набором запросов вместо N×8); detail-only поля (attendance,
+  ratings) карточкам не отдаются. Порядок входа сохранён, soft-deleted исключены.
+  Проверено интеграционным тестом против реального Postgres (`place_db_test.go`,
+  gated `AEVA_TEST_DSN`).
 - **✅ [ops] Миграции с леджером — СДЕЛАНО (батч 9).** Таблица `schema_migrations`:
   каждый файл применяется максимум один раз, в транзакции (миграция + запись
   версии коммитятся вместе — нет частично-применённого состояния). На каждом
@@ -143,7 +144,7 @@
 
 ### Низкое
 
-- 🔸 [data-model] Громоздкий place-SELECT продублирован 4× (List/GetByID/wishlist) и уже разошёлся по полям.
+- ✅→🔸 [data-model] Place-SELECT: List/GetByID/GetManyByIDs сведены к общим `placeSelectCols`+`placeBaseFrom`+`scanPlace` (батч 11) — дрейф List↔GetByID устранён. Остаётся 🔸: 2 более лёгкие копии в `wishlist.go` (без videos/top_comment) — консолидация добавила бы им ненужные колонки, оставлены намеренно.
 - 🔸 [backend] (✅ батч 2: лимит длины заметки; ✅ батч 5: review сверяет `place_id`; ✅ батч 7: TOCTOU лимита фото устранён через FOR UPDATE).
 - 🔸 [security] CORS `*` + `AllowCredentials:true` (инертно — токен в заголовке); публичная перечислимая `/p/:id` (перебор id выгружает каталог) → шарить по UUID.
 - 🔸 [ops] Деплой `git reset --hard` на проде (forward-only). (✅ батч 4: backend healthcheck + nginx ждёт healthy; ✅ батч 5: ротация docker-логов; ✅ батч 10: лимиты mem/cpu — потолки postgres 768m/backend 512m/front+nginx 128m)
